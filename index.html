@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEON HIGHWAY // Cyber Overdrive</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- ÍCONO DE PESTAÑA DEFINITIVO (MÉTODO TRADICIONAL) -->
+  <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+
+  <!-- Capa de líneas CRT estilo monitor retro -->
+  <div class="efecto-crt-lineas"></div>
+
+  <!-- Botón Flotante para salir al Hub Principal -->
+  <a href="https://synth-joy-station.onrender.com/" class="btn-regresar-arcade">← ARCADE HUB</a>
+
+  <!-- Contenedor Principal del Juego -->
+  <div id="contenedor-juego">
+
+    <!-- ==========================================
+         PANTALLA 1: MENÚ DE INICIO / CONFIGURACIÓN
+         ========================================== -->
+    <div id="menu-inicio">
+      <h1 class="titulo-neon">NEON HIGHWAY</h1>
+      <p class="subtitulo">// CYBER OVERDRIVE PROTOCOL</p>
+
+      <!-- Campo para Alias del Piloto -->
+      <div class="seccion-alias">
+        <label for="input-alias">> PILOT_ALIAS:</label>
+        <input type="text" id="input-alias" placeholder="DRIVER_01" maxlength="10">
+      </div>
+
+      <!-- Selector de Modo de Cámara / Perspectiva -->
+      <div class="selector-opcion">
+        <label for="select-camara">> MÓDULO CÁMARA:</label>
+        <select id="select-camara">
+          <option value="pseudo3d">PERSPECTIVA 3D (PSEUDO-3D)</option>
+          <option value="topdown">VISTA AÉREA (TOP-DOWN)</option>
+        </select>
+      </div>
+
+      <!-- Selector de Dificultad -->
+      <div class="selector-opcion">
+        <label for="select-diff">> DIFICULTAD / VELOCIDAD:</label>
+        <select id="select-diff">
+          <option value="facil">NORM // 180 KM/H</option>
+          <option value="medio" selected>OVERCLOCK // 240 KM/H</option>
+          <option value="dificil">TURBO // 300 KM/H</option>
+        </select>
+      </div>
+
+      <!-- Botón para Iniciar la Infiltración en Pista -->
+      <button class="btn-modo" onclick="iniciarCarrera()">[ INICIAR CARRERA ]</button>
+    </div>
+
+    <!-- ==========================================
+         PANTALLA 2: ARENA DE JUEGO & CANVAS
+         ========================================== -->
+    <div id="escenario-juego" class="oculto">
+      
+      <!-- Cabecera con Tacómetro y Marcadores -->
+      <div class="cabecera-arena">
+        <div class="marcador-box">
+          <span class="label-marcador">DISTANCIA</span>
+          <span id="score-val" class="val-marcador">0000 KM</span>
+        </div>
+
+        <div class="marcador-box">
+          <span class="label-marcador">VELOCIDAD</span>
+          <span id="speed-val" class="val-marcador">0 KM/H</span>
+        </div>
+
+        <div class="marcador-box">
+          <span class="label-marcador">TEMP MOTOR</span>
+          <span id="temp-val" class="val-marcador col-temp">35.0°C</span>
+        </div>
+      </div>
+
+      <!-- Lienzo Principal del Juego -->
+      <canvas id="lienzo-carrera" width="600" height="400"></canvas>
+
+      <!-- Controles de Partida -->
+      <div class="controles-partida">
+        <button id="btn-pause" onclick="pausarJuego()">[ PAUSA ]</button>
+        <button onclick="reiniciarCarrera()">[ REINICIAR ]</button>
+        <button onclick="volverAlMenu()">[ MENÚ ]</button>
+      </div>
+
+      <p class="controles-ayuda">CONTROLES: [A / D] o [← / →] Cambiar carril | [W / ↑] Nitro | [Espacio] Freno</p>
+    </div>
+
+  </div>
+
+  <!-- Footer Global de Copyright -->
+  <footer class="copyright-global">
+    &copy; 2026 NEON HIGHWAY v1.0 // SISTEMA DE TRÁNSITO DE DATOS // Todos los derechos reservados. Sistema Protegido bajo Licencia MIT.
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
