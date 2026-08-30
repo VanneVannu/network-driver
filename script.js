@@ -1,6 +1,6 @@
 /* ===================================================
-   NETWORK-DRIVER // TOP-DOWN ROTATIONAL RACER
-   MODO CÁMARA LIBRE 360° ESTILO MARIO KRAFT / DRIFT
+   NETWORK-DRIVER // CYBER OVERDRIVE v3.0 (360° DRIFT)
+   MOTOR DE CONDUCCIÓN FLUIDA TIPO MARIO KART TOP-DOWN
    =================================================== */
 
 const canvas = document.getElementById('lienzo-carrera');
@@ -13,49 +13,37 @@ let gameLoopInterval = null;
 let isPaused = true;
 let isGameOver = false;
 
-// Estado de Fases
-let estadoFase = "INSPECCION"; // "INSPECCION", "COUNTDOWN", "CARRERA"
+// Estado de la Fase
+let estadoFase = "MENU"; // "INSPECCION", "COUNTDOWN", "CARRERA"
 let countdownTimer = 3;
 let countdownInterval = null;
-let zoomFactor = 0.35; // Inicia alejado para vista general
+let zoomFactor = 0.3; 
 let targetZoom = 1.0;
 
-// Estado del Auto (Posición X, Y y Ángulo en el mundo)
+// Variables de Nivel y Tiempo
+let nivelActual = 1;
+let tiempoRestante = 45;
+let lapActual = 1;
+const totalLaps = 3;
+
+// FÍSICA Y VECTORIAL DEL VEHÍCULO (360 GRADOS)
 let car = {
-  x: 400,
-  y: 650,
+  x: 300,
+  y: 350,
   angle: -Math.PI / 2, // Apuntando hacia arriba
   speed: 0,
-  maxSpeed: 8,
-  accel: 0.18,
+  maxSpeed: 7,
+  accel: 0.15,
   friction: 0.96,
-  turnSpeed: 0.055
+  turnSpeed: 0.065,
+  nitro: false
 };
 
-// Física de Juego
-let tiempoRestante = 45;
-let kmRecorridos = 0;
-let nivelActual = 1;
-
-// Teclas
+// Teclas activas
 const keys = { up: false, down: false, left: false, right: false, nitro: false };
 
 /* ===================================================
-   1. DEFINICIÓN DEL CIRCUITO (TRAZADO GEOMÉTRICO)
-   =================================================== */
-// Pista definida por un camino de puntos (Waypoints)
-const circuitoBase = [
-  { x: 400, y: 650 },
-  { x: 400, y: 250 },
-  { x: 650, y: 150 },
-  { x: 950, y: 250 },
-  { x: 950, y: 650 },
-  { x: 750, y: 800 },
-  { x: 550, y: 750 }
-];
-
-/* ===================================================
-   2. SISTEMA DE AUDIO
+   1. SISTEMA DE AUDIO (WEB AUDIO API)
    =================================================== */
 class SoundEffects {
   constructor() { this.ctx = null; }
@@ -71,8 +59,7 @@ class SoundEffects {
     try {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+      osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
       gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
       osc.connect(gain); gain.connect(this.ctx.destination);
@@ -99,7 +86,7 @@ class SoundEffects {
 const sfx = new SoundEffects();
 
 /* ===================================================
-   3. CONTROLES Y EVENTOS
+   2. EVENTOS DE TECLADO (CONDUCCIÓN CONTINUA)
    =================================================== */
 window.addEventListener('keydown', (e) => {
   sfx.init();
@@ -109,7 +96,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = true;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
-  if (e.key === ' ' || e.key === 'Shift') keys.nitro = true;
+  if (e.key === ' ' || e.key === 'Spacebar') keys.nitro = true;
 });
 
 window.addEventListener('keyup', (e) => {
@@ -117,11 +104,11 @@ window.addEventListener('keyup', (e) => {
   if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = false;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = false;
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = false;
-  if (e.key === ' ' || e.key === 'Shift') keys.nitro = false;
+  if (e.key === ' ' || e.key === 'Spacebar') keys.nitro = false;
 });
 
 /* ===================================================
-   4. FLUJO DE JUEGO Y CONTEO
+   3. INICIO DE CARRERA Y ZOOM DE CÁMARA
    =================================================== */
 function iniciarCarrera() {
   sfx.init();
@@ -129,9 +116,9 @@ function iniciarCarrera() {
   aliasJugador = aliasInput !== "" ? aliasInput.toUpperCase() : "DRIVER_01";
   dificultad = document.getElementById('select-diff').value;
 
-  if (dificultad === 'facil') car.maxSpeed = 7;
-  else if (dificultad === 'medio') car.maxSpeed = 9;
-  else if (dificultad === 'dificil') car.maxSpeed = 11;
+  if (dificultad === 'facil') car.maxSpeed = 5.5;
+  else if (dificultad === 'medio') car.maxSpeed = 7.0;
+  else if (dificultad === 'dificil') car.maxSpeed = 8.5;
 
   document.getElementById('menu-inicio').classList.add('oculto');
   document.getElementById('escenario-juego').classList.remove('oculto');
@@ -143,18 +130,22 @@ function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
 
-  car.x = 400;
-  car.y = 650;
-  car.angle = -Math.PI / 2;
+  nivelActual = 1;
+  tiempoRestante = 45;
+  lapActual = 1;
+  
+  // Posición inicial en la línea de meta
+  car.x = 120;
+  car.y = 200;
+  car.angle = Math.PI / 2; // Orientado hacia abajo
   car.speed = 0;
-
-  tiempoRestante = 40;
-  kmRecorridos = 0;
+  
   isGameOver = false;
   isPaused = true;
   
+  // Vista general inicial
   estadoFase = "INSPECCION";
-  zoomFactor = 0.35;
+  zoomFactor = 0.35; 
   targetZoom = 1.0;
 
   actualizarHUD();
@@ -215,34 +206,48 @@ function volverAlMenu() {
 }
 
 /* ===================================================
-   5. BUCLE DE FÍSICA ROTACIONAL (360°)
+   4. MOTOR DE FÍSICA FLUIDA 360°
    =================================================== */
 function gameStep() {
-  // Transición de Zoom inicial
+  // Transición suave de Zoom inicial
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
     if (zoomFactor < targetZoom) zoomFactor += (targetZoom - zoomFactor) * 0.04;
   }
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
-    // Giro del auto
+    // Giro de Dirección
     if (keys.left) car.angle -= car.turnSpeed * (car.speed / car.maxSpeed + 0.2);
     if (keys.right) car.angle += car.turnSpeed * (car.speed / car.maxSpeed + 0.2);
 
-    // Aceleración y Nitro
-    let topVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
+    // Aceleración y Freno
+    let maxVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
     if (keys.up) {
-      if (car.speed < topVel) car.speed += car.accel;
+      if (car.speed < maxVel) car.speed += car.accel;
     } else if (keys.down) {
-      if (car.speed > -topVel * 0.4) car.speed -= car.accel;
+      if (car.speed > -car.maxSpeed * 0.4) car.speed -= car.accel;
     } else {
-      car.speed *= car.friction; // Ficción natural
+      car.speed *= car.friction; // Inercia / desaceleración
     }
 
-    // Actualizar coordenadas globales X, Y
+    // Actualizar Posición Vectorial en el Mapa
     car.x += Math.cos(car.angle) * car.speed;
     car.y += Math.sin(car.angle) * car.speed;
 
-    kmRecorridos += Math.abs(car.speed) * 0.05;
+    // Verificar si el auto se sale del lienzo (Bordes del mapa)
+    if (car.x < 30 || car.x > canvas.width - 30 || car.y < 30 || car.y > canvas.height - 30) {
+      car.speed *= 0.8; // Freno por roce neón
+    }
+
+    // Detección simplificada de paso por Meta (Línea en X=120, Y=200)
+    if (car.x > 100 && car.x < 140 && car.y > 180 && car.y < 220 && car.speed > 2) {
+      // Avanzar Vuelta / Lap
+      lapActual++;
+      sfx.playBeep(900, 'triangle', 0.2);
+      if (lapActual > totalLaps) {
+        victoriaTotal();
+        return;
+      }
+    }
   }
 
   actualizarHUD();
@@ -260,9 +265,23 @@ function gameOverTimeout() {
   ctx.fillText('TIME OUT // CONNECTION LOST', canvas.width / 2, canvas.height / 2);
 }
 
+function victoriaTotal() {
+  isGameOver = true;
+  ctx.fillStyle = 'rgba(9, 5, 20, 0.9)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 24px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('¡CARRERA COMPLETADA!', canvas.width / 2, canvas.height / 2 - 10);
+  ctx.fillStyle = '#d946ef';
+  ctx.font = '14px Courier New';
+  ctx.fillText(`PILOTO: ${aliasJugador} | TIEMPO RESTANTE: ${tiempoRestante}S`, canvas.width / 2, canvas.height / 2 + 20);
+}
+
 function actualizarHUD() {
-  document.getElementById('score-val').innerText = `${Math.floor(kmRecorridos)} M`;
-  document.getElementById('speed-val').innerText = `${Math.floor(Math.abs(car.speed) * 25)} KM/H`;
+  const velKmh = Math.floor(Math.abs(car.speed) * 35);
+  document.getElementById('score-val').innerText = `LAP ${lapActual}/${totalLaps}`;
+  document.getElementById('speed-val').innerText = `${velKmh} KM/H`;
 
   const tempEl = document.getElementById('temp-val');
   tempEl.innerText = `${tiempoRestante}S`;
@@ -270,7 +289,7 @@ function actualizarHUD() {
 }
 
 /* ===================================================
-   6. RENDERIZADO CON ROTACIÓN DE CÁMARA
+   5. RENDERIZADO VISUAL DEL CIRCUITO Y VEHÍCULO 360°
    =================================================== */
 function renderizar() {
   ctx.fillStyle = '#05020a';
@@ -278,105 +297,107 @@ function renderizar() {
 
   ctx.save();
 
-  if (estadoFase === "INSPECCION") {
-    // Vista General del Circuito Fijo
-    ctx.translate(canvas.width / 2 - 200, canvas.height / 2 - 150);
-    ctx.scale(0.45, 0.45);
-    dibujarPista();
-    dibujarAutoJugador();
-  } else {
-    // Cámara Centrada en el Auto con Rotación Libre
+  // Si estamos jugando, centramos la cámara suavemente en el vehículo
+  if (estadoFase === "CARRERA" || estadoFase === "COUNTDOWN") {
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(zoomFactor, zoomFactor);
-    ctx.rotate(-car.angle - Math.PI / 2); // La cámara gira con la dirección del auto
     ctx.translate(-car.x, -car.y);
-
-    dibujarPista();
-    dibujarAutoJugador();
   }
+
+  // Dibujar el Pista del Circuito Completo (Trazado Neón)
+  dibujarCircuitoCompleto();
+
+  // Dibujar Auto del Jugador (Rotación libre)
+  dibujarAuto360(car.x, car.y, car.angle);
 
   ctx.restore();
 
-  // Mini-Mapa HUD Fijo en Pantalla
-  if (estadoFase === "CARRERA") dibujarMiniMapa();
+  // Mini-Mapa HUD fijo en pantalla
+  if (estadoFase === "CARRERA") {
+    dibujarMiniMapa();
+  }
 
-  // Conteo Regresivo
+  // Pantalla de Cuenta Regresiva
   if (estadoFase === "COUNTDOWN") {
     ctx.fillStyle = '#facc15';
-    ctx.font = 'bold 60px Courier New';
+    ctx.font = 'bold 50px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText(countdownTimer > 0 ? countdownTimer : "OVERDRIVE!", canvas.width / 2, canvas.height / 2);
+    ctx.fillText(countdownTimer > 0 ? countdownTimer : "GO!", canvas.width / 2, canvas.height / 2);
   }
 }
 
-// Dibujar el trazado del circuito
-function dibujarPista() {
-  // Asfalto
+// Dibujar trazado de pista con curvas estilo Mario Kart
+function dibujarCircuitoCompleto() {
+  // Asfalto principal
   ctx.strokeStyle = '#120824';
   ctx.lineWidth = 90;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.beginPath();
-  trazarCaminoCircuito();
+  dibujarRutaPista(ctx);
   ctx.stroke();
 
-  // Bordes Neón
+  // Bordes Neón Púrpura
   ctx.strokeStyle = '#d946ef';
-  ctx.lineWidth = 98;
+  ctx.lineWidth = 96;
   ctx.shadowColor = '#d946ef';
   ctx.shadowBlur = 10;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Re-dibujar asfalto interno
-  ctx.strokeStyle = '#120824';
-  ctx.lineWidth = 86;
-  ctx.stroke();
-
-  // Línea Meta / Salida
-  ctx.strokeStyle = '#facc15';
-  ctx.lineWidth = 10;
   ctx.beginPath();
-  ctx.moveTo(350, 650);
-  ctx.lineTo(450, 650);
+  dibujarRutaPista(ctx);
   ctx.stroke();
+
+  // Interior de la pista
+  ctx.strokeStyle = '#090514';
+  ctx.lineWidth = 84;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  dibujarRutaPista(ctx);
+  ctx.stroke();
+
+  // Línea de Meta (Checkered Line)
+  ctx.fillStyle = '#facc15';
+  ctx.fillRect(100, 180, 40, 15);
 }
 
-function trazarCaminoCircuito() {
-  ctx.moveTo(circuitoBase[0].x, circuitoBase[0].y);
-  for (let i = 1; i < circuitoBase.length; i++) {
-    ctx.lineTo(circuitoBase[i].x, circuitoBase[i].y);
-  }
-  ctx.closePath();
+// Ruta con curvas suaves para el circuito
+function dibujarRutaPista(c) {
+  c.moveTo(120, 200);
+  c.lineTo(120, 320);
+  c.quadraticCurveTo(120, 380, 200, 380);
+  c.lineTo(400, 380);
+  c.quadraticCurveTo(500, 380, 500, 280);
+  c.lineTo(500, 150);
+  c.quadraticCurveTo(500, 80, 400, 80);
+  c.lineTo(200, 80);
+  c.quadraticCurveTo(120, 80, 120, 200);
 }
 
-// Dibujar vehículo del jugador
-function dibujarAutoJugador() {
+// Renderizar el vehículo con su rotación exacta
+function dibujarAuto360(x, y, angle) {
   ctx.save();
-  ctx.translate(car.x, car.y);
-  ctx.rotate(car.angle);
+  ctx.translate(x, y);
+  ctx.rotate(angle);
 
-  // Fuego de Nitro
+  // Fuego de Nitro / Escape
   if (keys.nitro) {
     ctx.fillStyle = '#facc15';
-    ctx.fillRect(-28, -6, 12, 12);
+    ctx.fillRect(-22, -4, 10, 8);
   }
 
-  // Chasis Auto
+  // Chasis Neón
   ctx.fillStyle = '#d946ef';
   ctx.shadowColor = '#d946ef';
   ctx.shadowBlur = 12;
-  ctx.fillRect(-18, -12, 36, 24);
+  ctx.fillRect(-14, -8, 28, 16);
 
   // Cabina / Parabrisas
   ctx.fillStyle = '#facc15';
-  ctx.fillRect(-4, -9, 12, 18);
-  ctx.shadowBlur = 0;
+  ctx.fillRect(-2, -6, 10, 12);
 
   ctx.restore();
 }
 
-// Mini-Mapa Radar
+// Mini-Mapa Esquina Superior Derecha
 function dibujarMiniMapa() {
   const mapW = 110;
   const mapH = 70;
@@ -389,19 +410,22 @@ function dibujarMiniMapa() {
   ctx.fillRect(mapX, mapY, mapW, mapH);
   ctx.strokeRect(mapX, mapY, mapW, mapH);
 
+  // Pista en pequeño (Escalada)
   ctx.save();
   ctx.translate(mapX + 10, mapY + 10);
-  ctx.scale(0.12, 0.1);
+  ctx.scale(0.15, 0.12);
   ctx.strokeStyle = '#d946ef';
-  ctx.lineWidth = 15;
+  ctx.lineWidth = 10;
   ctx.beginPath();
-  trazarCaminoCircuito();
+  dibujarRutaPista(ctx);
   ctx.stroke();
+  ctx.restore();
 
-  // Punto del Jugador
+  // Posición del Jugador en el Radar
+  const dotX = mapX + 10 + (car.x * 0.15);
+  const dotY = mapY + 10 + (car.y * 0.12);
   ctx.fillStyle = '#facc15';
   ctx.beginPath();
-  ctx.arc(car.x, car.y, 25, 0, Math.PI * 2);
+  ctx.arc(dotX, dotY, 3.5, 0, Math.PI * 2);
   ctx.fill();
-  ctx.restore();
 }
