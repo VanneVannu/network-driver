@@ -185,18 +185,23 @@ function gameStep() {
     if (keys.left) car.angle -= car.turnSpeed;
     if (keys.right) car.angle += car.turnSpeed;
 
+    // Aceleración y Freno (Corregidos)
     let topVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
+    
     if (keys.up) {
+      // W / Flecha Arriba -> ACELERAR HACIA ADELANTE
       if (car.speed < topVel) car.speed += car.accel;
     } else if (keys.down) {
+      // S / Flecha Abajo -> FRENAR / REVERSA
       if (car.speed > -topVel * 0.4) car.speed -= car.accel;
     } else {
       car.speed *= car.friction;
     }
 
+    // Actualización Vectorial de Posición (Signos adaptados a la orientación)
     car.x += Math.cos(car.angle) * car.speed;
     car.y += Math.sin(car.angle) * car.speed;
-
+    
     kmRecorridos += Math.abs(car.speed) * 0.05;
 
     // Detección de Meta
