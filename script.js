@@ -161,14 +161,9 @@ function prepararEstadoInicial() {
    =================================================== */
 function iniciarBucle() {
   if (estadoFase === "INSPECCION") {
-    // Resetear las teclas para evitar bloqueos
-    keys.up = false;
-    keys.down = false;
-    keys.left = false;
-    keys.right = false;
-    keys.nitro = false;
+    // Limpiar teclas
+    keys.up = keys.down = keys.left = keys.right = keys.nitro = false;
 
-    // Detener cualquier contador previo activo
     if (countdownInterval) clearInterval(countdownInterval);
 
     estadoFase = "COUNTDOWN";
@@ -184,7 +179,7 @@ function iniciarBucle() {
       if (countdownTimer > 0) {
         sfx.playBeep(600, 'sine', 0.1);
       } else {
-        // Al llegar a 0 o menos, LIMPIAR EL INTERVALO DE INMEDIATO
+        // Detener el conteo y pasar a modo CARRERA pura
         clearInterval(countdownInterval);
         countdownInterval = null;
         
@@ -192,7 +187,6 @@ function iniciarBucle() {
         estadoFase = "CARRERA";
         isPaused = false;
         
-        // Iniciar el reloj de juego
         iniciarTimerReloj();
       }
     }, 1000);
@@ -303,37 +297,38 @@ function actualizarHUD() {
    5. RENDERIZADO VISUAL DEL CIRCUITO Y VEHÍCULO 360°
    =================================================== */
 function renderizar() {
+  // Limpiar lienzo completo en cada frame
   ctx.fillStyle = '#05020a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
 
-  // Si estamos jugando, centramos la cámara suavemente en el vehículo
-  if (estadoFase === "CARRERA" || estadoFase === "COUNTDOWN") {
+  if (estadoFase === "INSPECCION") {
+    ctx.translate(canvas.width / 2 - 200, canvas.height / 2 - 150);
+    ctx.scale(0.45, 0.45);
+    dibujarPista();
+    dibujarAutoJugador();
+  } else {
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(zoomFactor, zoomFactor);
+    ctx.rotate(-car.angle - Math.PI / 2);
     ctx.translate(-car.x, -car.y);
+
+    dibujarPista();
+    dibujarAutoJugador();
   }
-
-  // Dibujar el Pista del Circuito Completo (Trazado Neón)
-  dibujarCircuitoCompleto();
-
-  // Dibujar Auto del Jugador (Rotación libre)
-  dibujarAuto360(car.x, car.y, car.angle);
 
   ctx.restore();
 
-  // Mini-Mapa HUD fijo en pantalla
-  if (estadoFase === "CARRERA") {
-    dibujarMiniMapa();
-  }
+  // Dibujar Mini-Mapa solo si estamos jugando
+  if (estadoFase === "CARRERA") dibujarMiniMapa();
 
-  // Pantalla de Cuenta Regresiva
-  if (estadoFase === "COUNTDOWN") {
+  // DIBUJAR CONTEO ÚNICAMENTE DURANTE LA FASE DE CONTEO
+  if (estadoFase === "COUNTDOWN" && countdownTimer > 0) {
     ctx.fillStyle = '#facc15';
-    ctx.font = 'bold 50px Courier New';
+    ctx.font = 'bold 60px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText(countdownTimer > 0 ? countdownTimer : "GO!", canvas.width / 2, canvas.height / 2);
+    ctx.fillText(countdownTimer.toString(), canvas.width / 2, canvas.height / 2);
   }
 }
 
