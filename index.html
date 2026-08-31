@@ -26,20 +26,20 @@
       <h1 class="titulo-neon">NEON HIGHWAY</h1>
       <p class="subtitulo">// CYBER OVERDRIVE PROTOCOL</p>
 
-      <!-- Campo para Alias del Piloto -->
-      <div class="seccion-alias">
-        <label for="input-alias">> PILOT_ALIAS:</label>
-        <input type="text" id="input-alias" placeholder="DRIVER_01" maxlength="10">
-      </div>
+      <!-- CAMPO ALIAS Y DIFICULTAD (INTERFAZ LIMPIADA) -->
+    <div class="grupo-campo">
+     <label for="input-alias">ALIAS DE PILOTO:</label>
+     <input type="text" id="input-alias" maxlength="10" placeholder="DRIVER_01" autocomplete="off">
+    </div>
 
-      <!-- Selector de Modo de Cámara / Perspectiva -->
-      <div class="selector-opcion">
-        <label for="select-camara">> MÓDULO CÁMARA:</label>
-        <select id="select-camara">
-          <option value="pseudo3d">PERSPECTIVA 3D (PSEUDO-3D)</option>
-          <option value="topdown">VISTA AÉREA (TOP-DOWN)</option>
-        </select>
-      </div>
+    <div class="grupo-campo">
+     <label for="select-diff">DIFICULTAD SISTEMA:</label>
+     <select id="select-diff">
+       <option value="facil">NIVEL 01 // FÁCIL (150 KM/H)</option>
+       <option value="medio" selected>NIVEL 02 // MEDIO (210 KM/H)</option>
+       <option value="dificil">NIVEL 03 // HARDCORE (270 KM/H)</option>
+     </select>
+    </div>
 
       <!-- Selector de Dificultad -->
       <div class="selector-opcion">
