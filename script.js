@@ -116,9 +116,10 @@ function iniciarCarrera() {
   aliasJugador = aliasInput !== "" ? aliasInput.toUpperCase() : "DRIVER_01";
   dificultad = document.getElementById('select-diff').value;
 
-  if (dificultad === 'facil') car.maxSpeed = 5.5;
-  else if (dificultad === 'medio') car.maxSpeed = 7.0;
-  else if (dificultad === 'dificil') car.maxSpeed = 8.5;
+  // Configuración de velocidad según la dificultad elegida
+  if (dificultad === 'facil') car.maxSpeed = 7;
+  else if (dificultad === 'medio') car.maxSpeed = 9;
+  else if (dificultad === 'dificil') car.maxSpeed = 11;
 
   document.getElementById('menu-inicio').classList.add('oculto');
   document.getElementById('escenario-juego').classList.remove('oculto');
