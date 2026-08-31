@@ -156,14 +156,20 @@ function prepararEstadoInicial() {
   gameLoopInterval = setInterval(gameStep, 1000 / 60);
 }
 
+/* ===================================================
+   CORRECCIÓN: CONTEO LIMPIO SIN CONGELAMIENTO EN 1
+   =================================================== */
 function iniciarBucle() {
   if (estadoFase === "INSPECCION") {
-    // Resetear todas las teclas para evitar que el coche empiece bloqueado
+    // Resetear las teclas para evitar bloqueos
     keys.up = false;
     keys.down = false;
     keys.left = false;
     keys.right = false;
     keys.nitro = false;
+
+    // Detener cualquier contador previo activo
+    if (countdownInterval) clearInterval(countdownInterval);
 
     estadoFase = "COUNTDOWN";
     countdownTimer = 3;
@@ -174,13 +180,19 @@ function iniciarBucle() {
 
     countdownInterval = setInterval(() => {
       countdownTimer--;
+      
       if (countdownTimer > 0) {
         sfx.playBeep(600, 'sine', 0.1);
-      } else if (countdownTimer === 0) {
+      } else {
+        // Al llegar a 0 o menos, LIMPIAR EL INTERVALO DE INMEDIATO
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+        
         sfx.playBeep(1200, 'triangle', 0.3);
         estadoFase = "CARRERA";
         isPaused = false;
-        clearInterval(countdownInterval);
+        
+        // Iniciar el reloj de juego
         iniciarTimerReloj();
       }
     }, 1000);
