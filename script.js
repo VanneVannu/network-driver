@@ -158,6 +158,13 @@ function prepararEstadoInicial() {
 
 function iniciarBucle() {
   if (estadoFase === "INSPECCION") {
+    // Resetear todas las teclas para evitar que el coche empiece bloqueado
+    keys.up = false;
+    keys.down = false;
+    keys.left = false;
+    keys.right = false;
+    keys.nitro = false;
+
     estadoFase = "COUNTDOWN";
     countdownTimer = 3;
     sfx.playBeep(600, 'sine', 0.1);
@@ -217,8 +224,9 @@ function gameStep() {
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
     // Giro de Dirección
-    if (keys.left) car.angle -= car.turnSpeed * (car.speed / car.maxSpeed + 0.2);
-    if (keys.right) car.angle += car.turnSpeed * (car.speed / car.maxSpeed + 0.2);
+    if (keys.left) car.angle -= car.turnSpeed;
+    if (keys.right) car.angle += car.turnSpeed;
+
 
     // Aceleración y Freno
     let maxVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
