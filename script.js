@@ -1,102 +1,71 @@
 /* ===================================================
-   NETWORK-DRIVER // CYBER OVERDRIVE v3.0 (360° DRIFT)
-   MOTOR DE CONDUCCIÓN FLUIDA TIPO MARIO KART TOP-DOWN
+   NETWORK-DRIVER // MOTOR DE CARRERA 360° CORREGIDO
    =================================================== */
 
 const canvas = document.getElementById('lienzo-carrera');
 const ctx = canvas.getContext('2d');
 
+// Ajustar resolución interna del Canvas
+canvas.width = 800;
+canvas.height = 450;
+
 let aliasJugador = "DRIVER_01";
 let dificultad = "medio";
 
 let gameLoopInterval = null;
+let countdownInterval = null;
+
 let isPaused = true;
 let isGameOver = false;
 
-// Estado de la Fase
-let estadoFase = "MENU"; // "INSPECCION", "COUNTDOWN", "CARRERA"
+// Estado de Fases
+let estadoFase = "INSPECCION"; // "INSPECCION", "COUNTDOWN", "CARRERA"
 let countdownTimer = 3;
-let countdownInterval = null;
-let zoomFactor = 0.3; 
+let zoomFactor = 0.35;
 let targetZoom = 1.0;
 
-// Variables de Nivel y Tiempo
-let nivelActual = 1;
-let tiempoRestante = 45;
-let lapActual = 1;
-const totalLaps = 3;
-
-// FÍSICA Y VECTORIAL DEL VEHÍCULO (360 GRADOS)
+// Estado del Vehículo
 let car = {
-  x: 300,
-  y: 350,
-  angle: -Math.PI / 2, // Apuntando hacia arriba
+  x: 400,
+  y: 650,
+  angle: -Math.PI / 2,
   speed: 0,
-  maxSpeed: 7,
-  accel: 0.15,
+  maxSpeed: 8,
+  accel: 0.18,
   friction: 0.96,
-  turnSpeed: 0.065,
-  nitro: false
+  turnSpeed: 0.055
 };
 
-// Teclas activas
+// Métricas
+let tiempoRestante = 45;
+let kmRecorridos = 0;
+let nivelActual = 1;
+
+// Teclas
 const keys = { up: false, down: false, left: false, right: false, nitro: false };
 
-/* ===================================================
-   1. SISTEMA DE AUDIO (WEB AUDIO API)
-   =================================================== */
-class SoundEffects {
-  constructor() { this.ctx = null; }
-  init() {
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AudioCtx();
-    }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
-  }
-  playBeep(freq = 440, type = 'sine', duration = 0.1) {
-    if (!this.ctx) return;
-    try {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-      gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
-      osc.connect(gain); gain.connect(this.ctx.destination);
-      osc.start(); osc.stop(this.ctx.currentTime + duration);
-    } catch (e) {}
-  }
-  playCrash() {
-    if (!this.ctx) return;
-    try {
-      const bufferSize = this.ctx.sampleRate * 0.3;
-      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const output = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-      const whiteNoise = this.ctx.createBufferSource();
-      whiteNoise.buffer = buffer;
-      const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
-      whiteNoise.connect(gain); gain.connect(this.ctx.destination);
-      whiteNoise.start();
-    } catch (e) {}
-  }
-}
-const sfx = new SoundEffects();
+// Circuito Base
+const circuitoBase = [
+  { x: 400, y: 650 },
+  { x: 400, y: 250 },
+  { x: 650, y: 150 },
+  { x: 950, y: 250 },
+  { x: 950, y: 650 },
+  { x: 750, y: 800 },
+  { x: 550, y: 750 }
+];
 
 /* ===================================================
-   2. EVENTOS DE TECLADO (CONDUCCIÓN CONTINUA)
+   CONTROLES DE TECLADO
    =================================================== */
 window.addEventListener('keydown', (e) => {
-  sfx.init();
   if (isGameOver || estadoFase !== "CARRERA") return;
 
   if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') keys.up = true;
   if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = true;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = true;
-  if (e.key === ' ' || e.key === 'Spacebar') keys.nitro = true;
+  if (e.key === ' ' || e.key === 'Shift') keys.nitro = true;
 });
 
 window.addEventListener('keyup', (e) => {
@@ -104,19 +73,17 @@ window.addEventListener('keyup', (e) => {
   if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = false;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = false;
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.right = false;
-  if (e.key === ' ' || e.key === 'Spacebar') keys.nitro = false;
+  if (e.key === ' ' || e.key === 'Shift') keys.nitro = false;
 });
 
 /* ===================================================
-   3. INICIO DE CARRERA Y ZOOM DE CÁMARA
+   FLUJO Y BOTONES
    =================================================== */
 function iniciarCarrera() {
-  sfx.init();
   const aliasInput = document.getElementById('input-alias').value.trim();
   aliasJugador = aliasInput !== "" ? aliasInput.toUpperCase() : "DRIVER_01";
   dificultad = document.getElementById('select-diff').value;
 
-  // Configuración de velocidad según la dificultad elegida
   if (dificultad === 'facil') car.maxSpeed = 7;
   else if (dificultad === 'medio') car.maxSpeed = 9;
   else if (dificultad === 'dificil') car.maxSpeed = 11;
@@ -131,62 +98,49 @@ function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
 
-  nivelActual = 1;
-  tiempoRestante = 45;
-  lapActual = 1;
-  
-  // Posición inicial en la línea de meta
-  car.x = 120;
-  car.y = 200;
-  car.angle = Math.PI / 2; // Orientado hacia abajo
+  car.x = 400;
+  car.y = 650;
+  car.angle = -Math.PI / 2;
   car.speed = 0;
-  
+
+  tiempoRestante = 45;
+  kmRecorridos = 0;
+  nivelActual = 1;
   isGameOver = false;
   isPaused = true;
   
-  // Vista general inicial
   estadoFase = "INSPECCION";
-  zoomFactor = 0.35; 
+  zoomFactor = 0.35;
   targetZoom = 1.0;
 
   actualizarHUD();
+
   const btnPause = document.getElementById('btn-pause');
   if (btnPause) btnPause.innerText = '[ INICIAR CARRERA ]';
 
+  // Iniciar bucle constante de dibujo (60 FPS)
   gameLoopInterval = setInterval(gameStep, 1000 / 60);
 }
 
-/* ===================================================
-   CORRECCIÓN: CONTEO LIMPIO SIN CONGELAMIENTO EN 1
-   =================================================== */
-function iniciarBucle() {
-  if (estadoFase === "INSPECCION") {
-    // Limpiar teclas
-    keys.up = keys.down = keys.left = keys.right = keys.nitro = false;
+function pausarJuego() {
+  if (isGameOver) return;
 
-    if (countdownInterval) clearInterval(countdownInterval);
+  if (estadoFase === "INSPECCION") {
+    keys.up = keys.down = keys.left = keys.right = keys.nitro = false;
 
     estadoFase = "COUNTDOWN";
     countdownTimer = 3;
-    sfx.playBeep(600, 'sine', 0.1);
 
     const btnPause = document.getElementById('btn-pause');
     if (btnPause) btnPause.innerText = '[ EN CARRERA ]';
 
     countdownInterval = setInterval(() => {
       countdownTimer--;
-      
-      if (countdownTimer > 0) {
-        sfx.playBeep(600, 'sine', 0.1);
-      } else {
-        // Detener el conteo y pasar a modo CARRERA pura
+      if (countdownTimer <= 0) {
         clearInterval(countdownInterval);
         countdownInterval = null;
-        
-        sfx.playBeep(1200, 'triangle', 0.3);
         estadoFase = "CARRERA";
         isPaused = false;
-        
         iniciarTimerReloj();
       }
     }, 1000);
@@ -211,7 +165,7 @@ function iniciarTimerReloj() {
 }
 
 function reiniciarCarrera() { prepararEstadoInicial(); }
-function pausarJuego() { if (!isGameOver) iniciarBucle(); }
+
 function volverAlMenu() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
@@ -220,20 +174,17 @@ function volverAlMenu() {
 }
 
 /* ===================================================
-   4. MOTOR DE FÍSICA FLUIDA 360°
+   FÍSICA
    =================================================== */
 function gameStep() {
-  // Transición de Zoom inicial
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
     if (zoomFactor < targetZoom) zoomFactor += (targetZoom - zoomFactor) * 0.04;
   }
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
-    // Giro del auto (respuesta inmediata incluso detenido)
     if (keys.left) car.angle -= car.turnSpeed;
     if (keys.right) car.angle += car.turnSpeed;
 
-    // Aceleración y Nitro
     let topVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
     if (keys.up) {
       if (car.speed < topVel) car.speed += car.accel;
@@ -243,15 +194,19 @@ function gameStep() {
       car.speed *= car.friction;
     }
 
-    // Actualizar coordenadas X, Y
     car.x += Math.cos(car.angle) * car.speed;
     car.y += Math.sin(car.angle) * car.speed;
 
     kmRecorridos += Math.abs(car.speed) * 0.05;
 
-    // DETECCIÓN DE META: Zona entre X (350 a 450) y Y (630 a 670)
+    // Detección de Meta
     if (car.x >= 350 && car.x <= 450 && car.y >= 630 && car.y <= 670 && car.speed > 1) {
-      avanzarSiguienteNivel();
+      nivelActual++;
+      tiempoRestante += 25;
+      car.x = 400;
+      car.y = 650;
+      car.angle = -Math.PI / 2;
+      car.speed = 0;
     }
   }
 
@@ -260,7 +215,6 @@ function gameStep() {
 }
 
 function gameOverTimeout() {
-  sfx.playCrash();
   isGameOver = true;
   ctx.fillStyle = 'rgba(9, 5, 20, 0.9)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -270,23 +224,9 @@ function gameOverTimeout() {
   ctx.fillText('TIME OUT // CONNECTION LOST', canvas.width / 2, canvas.height / 2);
 }
 
-function victoriaTotal() {
-  isGameOver = true;
-  ctx.fillStyle = 'rgba(9, 5, 20, 0.9)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#facc15';
-  ctx.font = 'bold 24px Courier New';
-  ctx.textAlign = 'center';
-  ctx.fillText('¡CARRERA COMPLETADA!', canvas.width / 2, canvas.height / 2 - 10);
-  ctx.fillStyle = '#d946ef';
-  ctx.font = '14px Courier New';
-  ctx.fillText(`PILOTO: ${aliasJugador} | TIEMPO RESTANTE: ${tiempoRestante}S`, canvas.width / 2, canvas.height / 2 + 20);
-}
-
 function actualizarHUD() {
-  const velKmh = Math.floor(Math.abs(car.speed) * 35);
-  document.getElementById('score-val').innerText = `LAP ${lapActual}/${totalLaps}`;
-  document.getElementById('speed-val').innerText = `${velKmh} KM/H`;
+  document.getElementById('score-val').innerText = `LAP ${nivelActual}/3`;
+  document.getElementById('speed-val').innerText = `${Math.floor(Math.abs(car.speed) * 25)} KM/H`;
 
   const tempEl = document.getElementById('temp-val');
   tempEl.innerText = `${tiempoRestante}S`;
@@ -294,10 +234,9 @@ function actualizarHUD() {
 }
 
 /* ===================================================
-   5. RENDERIZADO VISUAL DEL CIRCUITO Y VEHÍCULO 360°
+   RENDERIZADO VISUAL
    =================================================== */
 function renderizar() {
-  // Limpiar lienzo completo en cada frame
   ctx.fillStyle = '#05020a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -320,10 +259,8 @@ function renderizar() {
 
   ctx.restore();
 
-  // Dibujar Mini-Mapa solo si estamos jugando
   if (estadoFase === "CARRERA") dibujarMiniMapa();
 
-  // DIBUJAR CONTEO ÚNICAMENTE DURANTE LA FASE DE CONTEO
   if (estadoFase === "COUNTDOWN" && countdownTimer > 0) {
     ctx.fillStyle = '#facc15';
     ctx.font = 'bold 60px Courier New';
@@ -332,78 +269,59 @@ function renderizar() {
   }
 }
 
-// Dibujar trazado de pista con curvas estilo Mario Kart
-function dibujarCircuitoCompleto() {
-  // Asfalto principal
-  ctx.strokeStyle = '#120824';
-  ctx.lineWidth = 90;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  dibujarRutaPista(ctx);
-  ctx.stroke();
-
-  // Bordes Neón Púrpura
+function dibujarPista() {
   ctx.strokeStyle = '#d946ef';
-  ctx.lineWidth = 96;
+  ctx.lineWidth = 98;
   ctx.shadowColor = '#d946ef';
   ctx.shadowBlur = 10;
   ctx.beginPath();
-  dibujarRutaPista(ctx);
+  trazarCaminoCircuito();
   ctx.stroke();
-
-  // Interior de la pista
-  ctx.strokeStyle = '#090514';
-  ctx.lineWidth = 84;
   ctx.shadowBlur = 0;
-  ctx.beginPath();
-  dibujarRutaPista(ctx);
+
+  ctx.strokeStyle = '#120824';
+  ctx.lineWidth = 86;
   ctx.stroke();
 
-  // Línea de Meta (Checkered Line)
-  ctx.fillStyle = '#facc15';
-  ctx.fillRect(100, 180, 40, 15);
+  // Línea de Meta
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(350, 650);
+  ctx.lineTo(450, 650);
+  ctx.stroke();
 }
 
-// Ruta con curvas suaves para el circuito
-function dibujarRutaPista(c) {
-  c.moveTo(120, 200);
-  c.lineTo(120, 320);
-  c.quadraticCurveTo(120, 380, 200, 380);
-  c.lineTo(400, 380);
-  c.quadraticCurveTo(500, 380, 500, 280);
-  c.lineTo(500, 150);
-  c.quadraticCurveTo(500, 80, 400, 80);
-  c.lineTo(200, 80);
-  c.quadraticCurveTo(120, 80, 120, 200);
+function trazarCaminoCircuito() {
+  ctx.moveTo(circuitoBase[0].x, circuitoBase[0].y);
+  for (let i = 1; i < circuitoBase.length; i++) {
+    ctx.lineTo(circuitoBase[i].x, circuitoBase[i].y);
+  }
+  ctx.closePath();
 }
 
-// Renderizar el vehículo con su rotación exacta
-function dibujarAuto360(x, y, angle) {
+function dibujarAutoJugador() {
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle);
 
-  // Fuego de Nitro / Escape
   if (keys.nitro) {
     ctx.fillStyle = '#facc15';
-    ctx.fillRect(-22, -4, 10, 8);
+    ctx.fillRect(-28, -6, 12, 12);
   }
 
-  // Chasis Neón
   ctx.fillStyle = '#d946ef';
   ctx.shadowColor = '#d946ef';
   ctx.shadowBlur = 12;
-  ctx.fillRect(-14, -8, 28, 16);
+  ctx.fillRect(-18, -12, 36, 24);
 
-  // Cabina / Parabrisas
   ctx.fillStyle = '#facc15';
-  ctx.fillRect(-2, -6, 10, 12);
+  ctx.fillRect(-4, -9, 12, 18);
+  ctx.shadowBlur = 0;
 
   ctx.restore();
 }
 
-// Mini-Mapa Esquina Superior Derecha
 function dibujarMiniMapa() {
   const mapW = 110;
   const mapH = 70;
@@ -416,58 +334,18 @@ function dibujarMiniMapa() {
   ctx.fillRect(mapX, mapY, mapW, mapH);
   ctx.strokeRect(mapX, mapY, mapW, mapH);
 
-  // Pista en pequeño (Escalada)
   ctx.save();
   ctx.translate(mapX + 10, mapY + 10);
-  ctx.scale(0.15, 0.12);
+  ctx.scale(0.12, 0.1);
   ctx.strokeStyle = '#d946ef';
-  ctx.lineWidth = 10;
+  ctx.lineWidth = 15;
   ctx.beginPath();
-  dibujarRutaPista(ctx);
+  trazarCaminoCircuito();
   ctx.stroke();
-  ctx.restore();
 
-  // Posición del Jugador en el Radar
-  const dotX = mapX + 10 + (car.x * 0.15);
-  const dotY = mapY + 10 + (car.y * 0.12);
   ctx.fillStyle = '#facc15';
   ctx.beginPath();
-  ctx.arc(dotX, dotY, 3.5, 0, Math.PI * 2);
+  ctx.arc(car.x, car.y, 25, 0, Math.PI * 2);
   ctx.fill();
-}
-
-/* ===================================================
-   6. LÓGICA DE TRANSICIÓN DE NIVELES
-   =================================================== */
-function avanzarSiguienteNivel() {
-  sfx.playBeep(1000, 'triangle', 0.4);
-
-  // Bonus de tiempo y siguiente nivel
-  nivelActual++;
-  tiempoRestante += 25; // 25 segundos extra por nivel
-
-  // Reposicionar el auto en la línea de salida mirando hacia arriba
-  car.x = 400;
-  car.y = 650;
-  car.angle = -Math.PI / 2;
-  car.speed = 0;
-
-  // Si llegas al nivel 3, completas el juego
-  if (nivelActual > 3) {
-    victoriaTotal();
-  }
-}
-
-function victoriaTotal() {
-  isGameOver = true;
-  sfx.playBeep(1200, 'sine', 0.6);
-  ctx.fillStyle = 'rgba(9, 5, 20, 0.9)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#facc15';
-  ctx.font = 'bold 24px Courier New';
-  ctx.textAlign = 'center';
-  ctx.fillText('¡CIRCUITO OVERDRIVE COMPLETADO!', canvas.width / 2, canvas.height / 2 - 10);
-  ctx.fillStyle = '#d946ef';
-  ctx.font = '14px Courier New';
-  ctx.fillText(`PILOTO: ${aliasJugador} | TIEMPO SOBRANTE: ${tiempoRestante}S`, canvas.width / 2, canvas.height / 2 + 20);
+  ctx.restore();
 }
