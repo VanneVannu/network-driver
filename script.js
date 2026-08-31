@@ -217,45 +217,35 @@ function volverAlMenu() {
    4. MOTOR DE FÍSICA FLUIDA 360°
    =================================================== */
 function gameStep() {
-  // Transición suave de Zoom inicial
+  // Transición de Zoom inicial
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
     if (zoomFactor < targetZoom) zoomFactor += (targetZoom - zoomFactor) * 0.04;
   }
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
-    // Giro de Dirección
+    // Giro del auto (respuesta inmediata incluso detenido)
     if (keys.left) car.angle -= car.turnSpeed;
     if (keys.right) car.angle += car.turnSpeed;
 
-
-    // Aceleración y Freno
-    let maxVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
+    // Aceleración y Nitro
+    let topVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
     if (keys.up) {
-      if (car.speed < maxVel) car.speed += car.accel;
+      if (car.speed < topVel) car.speed += car.accel;
     } else if (keys.down) {
-      if (car.speed > -car.maxSpeed * 0.4) car.speed -= car.accel;
+      if (car.speed > -topVel * 0.4) car.speed -= car.accel;
     } else {
-      car.speed *= car.friction; // Inercia / desaceleración
+      car.speed *= car.friction;
     }
 
-    // Actualizar Posición Vectorial en el Mapa
+    // Actualizar coordenadas X, Y
     car.x += Math.cos(car.angle) * car.speed;
     car.y += Math.sin(car.angle) * car.speed;
 
-    // Verificar si el auto se sale del lienzo (Bordes del mapa)
-    if (car.x < 30 || car.x > canvas.width - 30 || car.y < 30 || car.y > canvas.height - 30) {
-      car.speed *= 0.8; // Freno por roce neón
-    }
+    kmRecorridos += Math.abs(car.speed) * 0.05;
 
-    // Detección simplificada de paso por Meta (Línea en X=120, Y=200)
-    if (car.x > 100 && car.x < 140 && car.y > 180 && car.y < 220 && car.speed > 2) {
-      // Avanzar Vuelta / Lap
-      lapActual++;
-      sfx.playBeep(900, 'triangle', 0.2);
-      if (lapActual > totalLaps) {
-        victoriaTotal();
-        return;
-      }
+    // DETECCIÓN DE META: Zona entre X (350 a 450) y Y (630 a 670)
+    if (car.x >= 350 && car.x <= 450 && car.y >= 630 && car.y <= 670 && car.speed > 1) {
+      avanzarSiguienteNivel();
     }
   }
 
@@ -437,4 +427,40 @@ function dibujarMiniMapa() {
   ctx.beginPath();
   ctx.arc(dotX, dotY, 3.5, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/* ===================================================
+   6. LÓGICA DE TRANSICIÓN DE NIVELES
+   =================================================== */
+function avanzarSiguienteNivel() {
+  sfx.playBeep(1000, 'triangle', 0.4);
+
+  // Bonus de tiempo y siguiente nivel
+  nivelActual++;
+  tiempoRestante += 25; // 25 segundos extra por nivel
+
+  // Reposicionar el auto en la línea de salida mirando hacia arriba
+  car.x = 400;
+  car.y = 650;
+  car.angle = -Math.PI / 2;
+  car.speed = 0;
+
+  // Si llegas al nivel 3, completas el juego
+  if (nivelActual > 3) {
+    victoriaTotal();
+  }
+}
+
+function victoriaTotal() {
+  isGameOver = true;
+  sfx.playBeep(1200, 'sine', 0.6);
+  ctx.fillStyle = 'rgba(9, 5, 20, 0.9)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 24px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('¡CIRCUITO OVERDRIVE COMPLETADO!', canvas.width / 2, canvas.height / 2 - 10);
+  ctx.fillStyle = '#d946ef';
+  ctx.font = '14px Courier New';
+  ctx.fillText(`PILOTO: ${aliasJugador} | TIEMPO SOBRANTE: ${tiempoRestante}S`, canvas.width / 2, canvas.height / 2 + 20);
 }
