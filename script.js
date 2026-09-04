@@ -52,24 +52,37 @@ let particulas = [];
 const keys = { up: false, down: false, left: false, right: false, nitro: false };
 
 // ===================================================
-// TRUTAS Y CIRCUITOS POR NIVEL
+// CIRCUITOS EXTENSOS (5 NIVELES)
 // ===================================================
 const circuitos = [
-  // Nivel 1: Circuito Oval
+  // Nivel 1: El Gran Óvalo Tecnológico (Introductorio pero amplio)
   [
-    { x: 400, y: 650 }, { x: 400, y: 250 }, { x: 650, y: 150 },
-    { x: 950, y: 250 }, { x: 950, y: 650 }, { x: 750, y: 800 }, { x: 550, y: 750 }
+    { x: 400, y: 800 }, { x: 400, y: 200 }, { x: 800, y: 100 },
+    { x: 1400, y: 200 }, { x: 1500, y: 800 }, { x: 1000, y: 1000 }, { x: 600, y: 950 }
   ],
-  // Nivel 2: Circuito con Chicana / S
+  // Nivel 2: La Serpiente Neón (Chicanas y curvas dobles)
   [
-    { x: 400, y: 650 }, { x: 300, y: 300 }, { x: 600, y: 300 },
-    { x: 600, y: 100 }, { x: 1000, y: 100 }, { x: 1000, y: 650 }, { x: 700, y: 750 }
+    { x: 400, y: 800 }, { x: 300, y: 400 }, { x: 600, y: 300 },
+    { x: 500, y: 100 }, { x: 1100, y: 100 }, { x: 1200, y: 400 },
+    { x: 900, y: 500 }, { x: 1400, y: 800 }, { x: 900, y: 1000 }
   ],
-  // Nivel 3: Circuito Complejo (Hardcore)
+  // Nivel 3: Circuito en "8" Intersección Abierta (Tramos rápidos)
   [
-    { x: 400, y: 650 }, { x: 200, y: 400 }, { x: 400, y: 150 },
-    { x: 800, y: 150 }, { x: 1000, y: 350 }, { x: 800, y: 550 },
-    { x: 1100, y: 750 }, { x: 600, y: 850 }
+    { x: 500, y: 900 }, { x: 300, y: 500 }, { x: 600, y: 200 },
+    { x: 1200, y: 200 }, { x: 1500, y: 500 }, { x: 1100, y: 900 },
+    { x: 800, y: 500 }, { x: 1300, y: 700 }
+  ],
+  // Nivel 4: El Laberinto de Horquillas (Técnico y estrecho de giro)
+  [
+    { x: 400, y: 900 }, { x: 200, y: 600 }, { x: 200, y: 200 },
+    { x: 700, y: 200 }, { x: 700, y: 600 }, { x: 1100, y: 200 },
+    { x: 1600, y: 200 }, { x: 1600, y: 800 }, { x: 1100, y: 950 }, { x: 800, y: 800 }
+  ],
+  // Nivel 5: Megacircuito "Network Omega" (El mapa definitivo)
+  [
+    { x: 400, y: 1000 }, { x: 200, y: 500 }, { x: 400, y: 150 },
+    { x: 1000, y: 100 }, { x: 1600, y: 300 }, { x: 1800, y: 700 },
+    { x: 1400, y: 1100 }, { x: 1000, y: 700 }, { x: 700, y: 1100 }
   ]
 ];
 
@@ -122,7 +135,7 @@ function prepararEstadoInicial() {
   nivelActual = 1; // Asegura iniciar siempre en nivel 1
   colocarAutoEnSalida();
 
-  tiempoRestante = 45;
+  tiempoRestante = 60;
   kmRecorridos = 0;
   particulas = [];
 
@@ -331,11 +344,13 @@ function distanciaPuntoASegmento(px, py, x1, y1, x2, y2) {
 
 function avanzarNivel() {
   nivelActual++;
-  tiempoRestante += 20;
+  
+  // Damos 35 segundos extra por cada mapa gigante completado
+  tiempoRestante += 35; 
 
-  if (nivelActual > 3) {
+  if (nivelActual > circuitos.length) {
     isGameOver = true;
-    alert("¡FELICIDADES! HAS COMPLETADO TODOS LOS NIVELES.");
+    alert("¡LEYENDA DEL ROAD! HAS COMPLETADO LOS 5 MEGACIRCUITOS.");
     volverAlMenu();
     return;
   }
@@ -354,7 +369,8 @@ function gameOverTimeout() {
 }
 
 function actualizarHUD() {
-  document.getElementById('score-val').innerText = `MAPA ${nivelActual}/3`;
+  // Ahora muestra 5 niveles
+  document.getElementById('score-val').innerText = `MAPA ${nivelActual}/${circuitos.length}`;
   document.getElementById('speed-val').innerText = `${Math.floor(Math.abs(car.speed) * 25)} KM/H`;
 
   const tempEl = document.getElementById('temp-val');
