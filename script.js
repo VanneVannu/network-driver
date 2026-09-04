@@ -338,7 +338,6 @@ function distanciaPuntoASegmento(px, py, x1, y1, x2, y2) {
 
 function avanzarNivel() {
   nivelActual++;
-  tiempoRestante += 35;
 
   if (nivelActual > circuitos.length) {
     isGameOver = true;
@@ -347,7 +346,12 @@ function avanzarNivel() {
     return;
   }
 
-  // Activar Notificación en Pantalla (Dura ~2.5 segundos)
+  // REINICIO DE TIEMPO POR NIVEL (En lugar de sumar)
+  // Como los mapas se vuelven más extensos, podemos dar un tiempo adecuado para cada uno:
+  const tiemposPorNivel = [60, 65, 70, 75, 80]; 
+  tiempoRestante = tiemposPorNivel[nivelActual - 1] || 60;
+
+  // Activar Notificación en Pantalla
   textoNotificacion = `¡NIVEL ${nivelActual} / ${circuitos.length} INICIADO!`;
   timerNotificacion = 150;
 
