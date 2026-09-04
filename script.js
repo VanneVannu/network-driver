@@ -1,6 +1,5 @@
 /* ===================================================
-   NETWORK-DRIVER // MOTOR DE CARRERA 360° COMPLETO
-   SISTEMA ANTI-ATAJOS, META ALINEADA Y NIVELES EXTENSOS
+   NETWORK-DRIVER // MOTOR DE CARRERA CON PISTAS CURVAS
    =================================================== */
 
 const canvas = document.getElementById('lienzo-carrera');
@@ -18,7 +17,6 @@ let countdownInterval = null;
 let isPaused = true;
 let isGameOver = false;
 
-// Estado de Fases y Notificaciones
 let estadoFase = "INSPECCION";
 let countdownTimer = 3;
 let zoomFactor = 0.35;
@@ -27,11 +25,9 @@ let targetZoom = 1.0;
 let textoNotificacion = "";
 let timerNotificacion = 0;
 
-// Contador de penalización fuera de pista
 let framesFueraDePista = 0;
 let flashFaltaTimer = 0;
 
-// Cámara y Coche
 let cam = { x: 400, y: 650, angle: -Math.PI / 2 };
 
 let car = {
@@ -58,37 +54,37 @@ let particulas = [];
 const keys = { up: false, down: false, left: false, right: false, nitro: false };
 
 // ===================================================
-// CIRCUITOS EXTENSOS (5 NIVELES)
+// CIRCUITOS CON PUNTOS DE CONTROL (5 NIVELES)
 // ===================================================
 const circuitos = [
-  // Nivel 1: El Gran Óvalo Tecnológico
+  // Nivel 1: El Gran Óvalo Suave
   [
-    { x: 400, y: 800 }, { x: 400, y: 200 }, { x: 800, y: 100 },
-    { x: 1400, y: 200 }, { x: 1500, y: 800 }, { x: 1000, y: 1000 }, { x: 600, y: 950 }
+    { x: 400, y: 800 }, { x: 400, y: 200 }, { x: 900, y: 100 },
+    { x: 1500, y: 300 }, { x: 1500, y: 800 }, { x: 900, y: 1000 }
   ],
-  // Nivel 2: La Serpiente Neón
+  // Nivel 2: Serpiente con Curvas Estilo F1
   [
-    { x: 400, y: 800 }, { x: 300, y: 400 }, { x: 600, y: 300 },
-    { x: 500, y: 100 }, { x: 1100, y: 100 }, { x: 1200, y: 400 },
-    { x: 900, y: 500 }, { x: 1400, y: 800 }, { x: 900, y: 1000 }
+    { x: 400, y: 800 }, { x: 300, y: 400 }, { x: 600, y: 200 },
+    { x: 1100, y: 100 }, { x: 1300, y: 500 }, { x: 1000, y: 600 },
+    { x: 1400, y: 900 }, { x: 800, y: 1050 }
   ],
-  // Nivel 3: Circuito Intersección
+  // Nivel 3: Circuito en "8" Fluido
   [
-    { x: 500, y: 900 }, { x: 300, y: 500 }, { x: 600, y: 200 },
-    { x: 1200, y: 200 }, { x: 1500, y: 500 }, { x: 1100, y: 900 },
-    { x: 800, y: 500 }, { x: 1300, y: 700 }
+    { x: 500, y: 900 }, { x: 300, y: 400 }, { x: 700, y: 150 },
+    { x: 1300, y: 150 }, { x: 1600, y: 500 }, { x: 1200, y: 950 },
+    { x: 800, y: 500 }
   ],
-  // Nivel 4: Laberinto de Horquillas
+  // Nivel 4: Autódromo de Horquillas Redondeadas
   [
-    { x: 400, y: 900 }, { x: 200, y: 600 }, { x: 200, y: 200 },
-    { x: 700, y: 200 }, { x: 700, y: 600 }, { x: 1100, y: 200 },
-    { x: 1600, y: 200 }, { x: 1600, y: 800 }, { x: 1100, y: 950 }, { x: 800, y: 800 }
+    { x: 400, y: 900 }, { x: 200, y: 500 }, { x: 400, y: 150 },
+    { x: 800, y: 150 }, { x: 800, y: 650 }, { x: 1200, y: 150 },
+    { x: 1600, y: 400 }, { x: 1500, y: 900 }, { x: 900, y: 850 }
   ],
   // Nivel 5: Megacircuito Network Omega
   [
-    { x: 400, y: 1000 }, { x: 200, y: 500 }, { x: 400, y: 150 },
-    { x: 1000, y: 100 }, { x: 1600, y: 300 }, { x: 1800, y: 700 },
-    { x: 1400, y: 1100 }, { x: 1000, y: 700 }, { x: 700, y: 1100 }
+    { x: 400, y: 1000 }, { x: 200, y: 450 }, { x: 500, y: 100 },
+    { x: 1200, y: 100 }, { x: 1700, y: 400 }, { x: 1700, y: 850 },
+    { x: 1200, y: 1100 }, { x: 900, y: 700 }, { x: 600, y: 1100 }
   ]
 ];
 
@@ -97,7 +93,7 @@ function obtenerCircuitoActual() {
 }
 
 /* ===================================================
-   CONTROLES DE TECLADO
+   CONTROLES
    =================================================== */
 window.addEventListener('keydown', (e) => {
   if (isGameOver) return;
@@ -117,7 +113,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 /* ===================================================
-   FLUJO DE JUEGO Y RESTART
+   FLUJO DE JUEGO
    =================================================== */
 function iniciarCarrera() {
   const aliasInput = document.getElementById('input-alias').value.trim();
@@ -170,7 +166,7 @@ function colocarAutoEnSalida() {
   const dy = pSiguiente.y - pSalida.y;
   const anguloPista = Math.atan2(dy, dx);
 
-  const distAdelanto = 80;
+  const distAdelanto = 100;
   car.x = pSalida.x + Math.cos(anguloPista) * distAdelanto;
   car.y = pSalida.y + Math.sin(anguloPista) * distAdelanto;
 
@@ -238,7 +234,7 @@ function volverAlMenu() {
 }
 
 /* ===================================================
-   FÍSICA, PENALIZACIÓN Y LÓGICA DE JUEGO
+   FÍSICA, PENALIZACIÓN Y LÓGICA
    =================================================== */
 function gameStep() {
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
@@ -248,13 +244,12 @@ function gameStep() {
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
     verificarFueraDePista();
 
-    // Sanción Anti-Atajos (Restar 1s por cada 30 frames ~ 0.5s fuera de pista)
     if (fueraDePista && Math.abs(car.speed) > 0.5) {
       framesFueraDePista++;
       if (framesFueraDePista >= 30) {
         tiempoRestante = Math.max(0, tiempoRestante - 1);
         framesFueraDePista = 0;
-        flashFaltaTimer = 15; // Activa destello visual
+        flashFaltaTimer = 15;
         if (tiempoRestante <= 0) gameOverTimeout();
       }
     } else {
@@ -289,7 +284,6 @@ function gameStep() {
 
     kmRecorridos += Math.sqrt(car.vx * car.vx + car.vy * car.vy) * 0.05;
 
-    // Partículas
     if (keys.nitro || fueraDePista || (Math.abs(car.speed) > 4 && (keys.left || keys.right))) {
       particulas.push({
         x: car.x - Math.cos(car.angle) * 15,
@@ -300,16 +294,20 @@ function gameStep() {
       });
     }
 
-    // META
-    const pMeta = obtenerCircuitoActual()[0];
-    let distMeta = Math.hypot(car.x - pMeta.x, car.y - pMeta.y);
+    // Meta en la recta principal
+    const p1 = obtenerCircuitoActual()[0];
+    const p2 = obtenerCircuitoActual()[1];
+    const angulo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const metaX = p1.x + Math.cos(angulo) * 30;
+    const metaY = p1.y + Math.sin(angulo) * 30;
+
+    let distMeta = Math.hypot(car.x - metaX, car.y - metaY);
 
     if (distMeta < 50 && car.speed > 2 && !cruzoMeta) {
       cruzoMeta = true;
       avanzarNivel();
     }
 
-    // Cámara Suave
     cam.x += (car.x - cam.x) * 0.1;
     cam.y += (car.y - cam.y) * 0.1;
     
@@ -319,7 +317,6 @@ function gameStep() {
     cam.angle += diffAngle * 0.08;
   }
 
-  // Actualizar temporizadores y partículas
   for (let i = particulas.length - 1; i >= 0; i--) {
     particulas[i].life -= 0.05;
     if (particulas[i].life <= 0) particulas.splice(i, 1);
@@ -343,7 +340,7 @@ function verificarFueraDePista() {
     if (dist < distMinima) distMinima = dist;
   }
 
-  fueraDePista = distMinima > 42;
+  fueraDePista = distMinima > 45;
 }
 
 function distanciaPuntoASegmento(px, py, x1, y1, x2, y2) {
@@ -364,9 +361,7 @@ function avanzarNivel() {
     return;
   }
 
-  // 60 Segundos fijos al empezar cada mapa
   tiempoRestante = 60;
-
   textoNotificacion = `¡NIVEL ${nivelActual} / ${circuitos.length} INICIADO!`;
   timerNotificacion = 150;
 
@@ -393,7 +388,7 @@ function actualizarHUD() {
 }
 
 /* ===================================================
-   RENDERIZADO
+   RENDERIZADO CON CURVAS BÉZIER Y META PERFECTA
    =================================================== */
 function renderizar() {
   ctx.fillStyle = '#05020a';
@@ -427,7 +422,6 @@ function renderizar() {
   if (estadoFase === "CARRERA") {
     dibujarMiniMapa();
     
-    // Alerta de Fuera de Pista y Penalización
     if (fueraDePista) {
       ctx.fillStyle = '#ff3355';
       ctx.font = 'bold 18px Courier New';
@@ -435,7 +429,6 @@ function renderizar() {
       ctx.fillText('[ ¡FUERA DE PISTA! PENALIZACIÓN -1S ]', canvas.width / 2, canvas.height - 30);
     }
 
-    // Banner de Nivel
     if (timerNotificacion > 0) {
       ctx.fillStyle = 'rgba(18, 8, 36, 0.85)';
       ctx.strokeStyle = '#facc15';
@@ -481,47 +474,68 @@ function dibujarGridFondo() {
 function dibujarPista() {
   const circuito = obtenerCircuitoActual();
 
-  // Borde Exterior Neón
+  // Borde Neón Exterior Redondeado
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.shadowColor = '#d946ef';
   ctx.shadowBlur = 12;
   ctx.beginPath();
-  trazarCaminoCircuito(circuito);
+  trazarCaminoCurvo(circuito);
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   // Asfalto Interior
   ctx.strokeStyle = '#120824';
-  ctx.lineWidth = 84;
+  ctx.lineWidth = 80;
   ctx.stroke();
 
-  // DIBUJO DE LÍNEA DE META PERPENDICULAR DENTRO DE LA PISTA
+  // DIBUJO DE META EXACTO EN LA RECTA DE SALIDA
   const p1 = circuito[0];
   const p2 = circuito[1];
-  
   const anguloTramo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
+  const metaX = p1.x + Math.cos(anguloTramo) * 30;
+  const metaY = p1.y + Math.sin(anguloTramo) * 30;
+
   ctx.save();
-  ctx.translate(p1.x, p1.y);
+  ctx.translate(metaX, metaY);
   ctx.rotate(anguloTramo);
 
   ctx.strokeStyle = '#facc15';
   ctx.lineWidth = 10;
   ctx.beginPath();
-  ctx.moveTo(0, -42);
-  ctx.lineTo(0, 42);
+  ctx.moveTo(0, -40);
+  ctx.lineTo(0, 40);
   ctx.stroke();
 
   ctx.restore();
 }
 
-function trazarCaminoCircuito(circuito) {
-  ctx.moveTo(circuito[0].x, circuito[0].y);
-  for (let i = 1; i < circuito.length; i++) {
-    ctx.lineTo(circuito[i].x, circuito[i].y);
+// ALGORITMO DE SUAVIZADO DE PISTA (CURVAS BÉZIER)
+function trazarCaminoCurvo(pts) {
+  if (pts.length < 3) return;
+
+  const len = pts.length;
+  const p0 = pts[0];
+  const pLast = pts[len - 1];
+
+  // Punto medio entre el último y el primero
+  let midX = (pLast.x + p0.x) / 2;
+  let midY = (pLast.y + p0.y) / 2;
+
+  ctx.moveTo(midX, midY);
+
+  for (let i = 0; i < len; i++) {
+    const pCurrent = pts[i];
+    const pNext = pts[(i + 1) % len];
+
+    const nextMidX = (pCurrent.x + pNext.x) / 2;
+    const nextMidY = (pCurrent.y + pNext.y) / 2;
+
+    ctx.quadraticCurveTo(pCurrent.x, pCurrent.y, nextMidX, nextMidY);
   }
-  ctx.closePath();
 }
 
 function dibujarParticulas() {
@@ -570,8 +584,10 @@ function dibujarMiniMapa() {
   ctx.scale(0.05, 0.05);
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 15;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.beginPath();
-  trazarCaminoCircuito(circuito);
+  trazarCaminoCurvo(circuito);
   ctx.stroke();
 
   ctx.fillStyle = '#facc15';
