@@ -127,6 +127,7 @@ function iniciarCarrera() {
   document.getElementById('menu-inicio').classList.add('oculto');
   document.getElementById('escenario-juego').classList.remove('oculto');
 
+  iniciarAudio();
   prepararEstadoInicial();
 }
 
@@ -134,6 +135,7 @@ function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
 
+  
   nivelActual = 1;
   tiempoRestante = 60;
   kmRecorridos = 0;
@@ -331,6 +333,15 @@ function gameStep() {
 
   actualizarHUD();
   renderizar();
+
+    // Actualizar tono de motor en cada frame
+  actualizarSonidoMotor(car.speed, 8);
+
+  // Si el auto está derrapando o fuera de pista, sonar derrape:
+  if (estaFueraDePista && car.speed > 2) {
+    reproducirEfectoDerrape();
+  }
+  
 }
 
 function verificarFueraDePista() {
@@ -477,7 +488,7 @@ function dibujarGridFondo() {
 function dibujarPista() {
   const circuito = obtenerCircuitoActual();
 
-  // 1. Borde Neón Exterior Redondeado
+  // 1. Borde Neón Exterior
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
   ctx.lineCap = 'round';
@@ -494,14 +505,24 @@ function dibujarPista() {
   ctx.lineWidth = 80;
   ctx.stroke();
 
-  // 3. DIBUJO DE META DETRÁS DEL AUTO
-  const p1 = circuito[0];
-  const p2 = circuito[1];
-  const angulo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+  // 3. META CENTRADA EN RECTA VALIDA
+  let p1 = circuito[0];
+  let p2 = circuito[1];
+  let dx = p2.x - p1.x;
+  let dy = p2.y - p1.y;
+  let dist = Math.hypot(dx, dy);
 
-  // Meta colocada a 30px del inicio (detrás del coche)
-  const metaX = p1.x + Math.cos(angulo) * 30;
-  const metaY = p1.y + Math.sin(angulo) * 30;
+  // Si el primer tramo es corto, usa el segundo para garantizar recta
+  if (dist < 150 && circuito.length > 2) {
+    p1 = circuito[1];
+    p2 = circuito[2];
+    dx = p2.x - p1.x;
+    dy = p2.y - p1.y;
+  }
+
+  const angulo = Math.atan2(dy, dx);
+  const metaX = p1.x + Math.cos(angulo) * 40;
+  const metaY = p1.y + Math.sin(angulo) * 40;
 
   ctx.save();
   ctx.translate(metaX, metaY);
@@ -597,4 +618,84 @@ function dibujarMiniMapa() {
   ctx.arc(car.x, car.y, 30, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+// --- SISTEMA DE AUDIO SINTETIZADO ---
+let audioCtx = null;
+let engineOsc = null;
+let engineGain = null;
+let musicInterval = null;
+
+function iniciarAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Oscilador para el Motor
+  engineOsc = audioCtx.createOscillator();
+  engineGain = audioCtx.createGain();
+
+  engineOsc.type = 'sawtooth';
+  engineOsc.frequency.setValueAtTime(40, audioCtx.currentTime); // Tono grave base
+  engineGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+
+  engineOsc.connect(engineGain);
+  engineGain.connect(audioCtx.destination);
+  engineOsc.start();
+
+  reproducirMusicaSynth();
+}
+
+// Actualiza el sonido del motor según la velocidad del coche
+function actualizarSonidoMotor(velocidad, maxVel) {
+  if (!audioCtx || !engineOsc) return;
+  const ratio = Math.abs(velocidad) / maxVel;
+  const freq = 40 + ratio * 160; // Sube el tono al acelerar
+  engineOsc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.1);
+}
+
+// Sonido de derrape (Ruido Blanco)
+function reproducirEfectoDerrape() {
+  if (!audioCtx) return;
+  const bufferSize = audioCtx.sampleRate * 0.1;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+  
+  noise.connect(gain);
+  gain.connect(audioCtx.destination);
+  noise.start();
+}
+
+// Bucle de Música Synthwave Básica
+function reproducirMusicaSynth() {
+  const notas = [110, 130.81, 146.83, 164.81]; // A2, C3, D3, E3
+  let paso = 0;
+
+  musicInterval = setInterval(() => {
+    if (isPaused || isGameOver || !audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(notas[paso % notas.length], audioCtx.currentTime);
+
+    gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
+
+    paso++;
+  }, 250);
 }
