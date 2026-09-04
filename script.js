@@ -17,6 +17,7 @@ let countdownInterval = null;
 
 let isPaused = true;
 let isGameOver = false;
+let cruzoMeta = false; // Evita activar la meta inmediatamente al aparecer
 
 // Estado de Fases
 let estadoFase = "INSPECCION";
@@ -118,11 +119,11 @@ function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
 
+  nivelActual = 1; // Asegura iniciar siempre en nivel 1
   colocarAutoEnSalida();
 
   tiempoRestante = 45;
   kmRecorridos = 0;
-  nivelActual = 1;
   particulas = [];
 
   isGameOver = false;
@@ -141,13 +142,17 @@ function prepararEstadoInicial() {
 }
 
 function colocarAutoEnSalida() {
-  const pInicio = obtenerCircuitoActual()[0];
+  const circuito = obtenerCircuitoActual();
+  const pInicio = circuito[0];
+  
+  // Colocar el auto un poco antes/después de la línea para evitar colisión inmediata
   car.x = pInicio.x;
-  car.y = pInicio.y;
+  car.y = pInicio.y + 30; 
   car.vx = 0;
   car.vy = 0;
   car.angle = -Math.PI / 2;
   car.speed = 0;
+  cruzoMeta = false; // Resetea la meta para el nuevo nivel
 
   cam.x = car.x;
   cam.y = car.y;
@@ -260,11 +265,12 @@ function gameStep() {
       });
     }
 
-    // DETECCIÓN DE META (Retorno al punto inicial)
+   // DETECCIÓN DE META (Requiere estar en movimiento rápido y no haberla activado ya)
     const pMeta = obtenerCircuitoActual()[0];
     let distMeta = Math.hypot(car.x - pMeta.x, car.y - pMeta.y);
 
-    if (distMeta < 50 && car.speed > 1) {
+    if (distMeta < 40 && car.speed > 2 && !cruzoMeta) {
+      cruzoMeta = true;
       avanzarNivel();
     }
 
