@@ -294,12 +294,14 @@ function gameStep() {
       });
     }
 
-    // Meta en la recta principal
-    const p1 = obtenerCircuitoActual()[0];
-    const p2 = obtenerCircuitoActual()[1];
+    // Detección de Meta sobre el Tramo Recto
+    const circuitoActual = obtenerCircuitoActual();
+    const p1 = circuitoActual[0];
+    const p2 = circuitoActual[1];
     const angulo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-    const metaX = p1.x + Math.cos(angulo) * 30;
-    const metaY = p1.y + Math.sin(angulo) * 30;
+
+    const metaX = p1.x + Math.cos(angulo) * 120;
+    const metaY = p1.y + Math.sin(angulo) * 120;
 
     let distMeta = Math.hypot(car.x - metaX, car.y - metaY);
 
@@ -474,7 +476,7 @@ function dibujarGridFondo() {
 function dibujarPista() {
   const circuito = obtenerCircuitoActual();
 
-  // Borde Neón Exterior Redondeado
+  // 1. Borde Neón Exterior
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
   ctx.lineCap = 'round';
@@ -486,23 +488,29 @@ function dibujarPista() {
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  // Asfalto Interior
+  // 2. Asfalto Interior
   ctx.strokeStyle = '#120824';
   ctx.lineWidth = 80;
   ctx.stroke();
 
-  // DIBUJO DE META EXACTO EN LA RECTA DE SALIDA
+  // 3. DIBUJO DE META PERFECTA EN TRAMO RECTO
   const p1 = circuito[0];
   const p2 = circuito[1];
-  const anguloTramo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
-  const metaX = p1.x + Math.cos(anguloTramo) * 30;
-  const metaY = p1.y + Math.sin(anguloTramo) * 30;
+  // Dirección exacta de la recta inicial
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const anguloRecta = Math.atan2(dy, dx);
+
+  // Colocamos la meta en el centro del tramo recto (distancia 120px)
+  const metaX = p1.x + Math.cos(anguloRecta) * 120;
+  const metaY = p1.y + Math.sin(anguloRecta) * 120;
 
   ctx.save();
   ctx.translate(metaX, metaY);
-  ctx.rotate(anguloTramo);
+  ctx.rotate(anguloRecta);
 
+  // Línea perpendicular exacta al sentido de la recta
   ctx.strokeStyle = '#facc15';
   ctx.lineWidth = 10;
   ctx.beginPath();
@@ -513,29 +521,27 @@ function dibujarPista() {
   ctx.restore();
 }
 
-// ALGORITMO DE SUAVIZADO DE PISTA (CURVAS BÉZIER)
+// TRAZADO ESTILO ARCADE: RECTAS CON EMPALMES REDONDEADOS (arcTo)
 function trazarCaminoCurvo(pts) {
   if (pts.length < 3) return;
 
   const len = pts.length;
-  const p0 = pts[0];
-  const pLast = pts[len - 1];
+  const radioCurva = 80; // Radio del giro en las esquinas
 
-  // Punto medio entre el último y el primero
-  let midX = (pLast.x + p0.x) / 2;
-  let midY = (pLast.y + p0.y) / 2;
+  // Punto inicial (punto medio del primer tramo recto para garantizar meta en recta)
+  const startX = (pts[0].x + pts[1].x) / 2;
+  const startY = (pts[0].y + pts[1].y) / 2;
 
-  ctx.moveTo(midX, midY);
+  ctx.moveTo(startX, startY);
 
-  for (let i = 0; i < len; i++) {
-    const pCurrent = pts[i];
+  for (let i = 1; i <= len; i++) {
+    const pPrev = pts[i % len];
     const pNext = pts[(i + 1) % len];
 
-    const nextMidX = (pCurrent.x + pNext.x) / 2;
-    const nextMidY = (pCurrent.y + pNext.y) / 2;
-
-    ctx.quadraticCurveTo(pCurrent.x, pCurrent.y, nextMidX, nextMidY);
+    ctx.arcTo(pPrev.x, pPrev.y, pNext.x, pNext.y, radioCurva);
   }
+
+  ctx.closePath();
 }
 
 function dibujarParticulas() {
