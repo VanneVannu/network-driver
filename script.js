@@ -93,6 +93,29 @@ function obtenerCircuitoActual() {
   return circuitos[(nivelActual - 1) % circuitos.length];
 }
 
+// Devuelve un tramo recto válido de la pista para la meta
+function obtenerSegmentoMeta() {
+  const circuito = obtenerCircuitoActual();
+  for (let i = 0; i < circuito.length; i++) {
+    let p1 = circuito[i];
+    let p2 = circuito[(i + 1) % circuito.length];
+    let dx = p2.x - p1.x;
+    let dy = p2.y - p1.y;
+    let dist = Math.hypot(dx, dy);
+
+    // Asegura una recta con longitud suficiente (> 300px)
+    if (dist >= 300) {
+      return { p1, p2, dx, dy, dist };
+    }
+  }
+  return { 
+    p1: circuito[0], 
+    p2: circuito[1], 
+    dx: circuito[1].x - circuito[0].x, 
+    dy: circuito[1].y - circuito[0].y 
+  };
+}
+
 // ===================================================
 // SISTEMA DE AUDIO SINTETIZADO (WEB AUDIO API)
 // ===================================================
@@ -109,7 +132,8 @@ function iniciarAudio() {
 
   engineOsc.type = 'sawtooth';
   engineOsc.frequency.setValueAtTime(40, audioCtx.currentTime);
-  engineGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+  // Silencio inicial en reposo
+  engineGain.gain.setValueAtTime(0, audioCtx.currentTime);
 
   engineOsc.connect(engineGain);
   engineGain.connect(audioCtx.destination);
@@ -119,10 +143,22 @@ function iniciarAudio() {
 }
 
 function actualizarSonidoMotor(velocidad, maxVel) {
-  if (!audioCtx || !engineOsc) return;
-  const ratio = Math.abs(velocidad) / maxVel;
+  if (!audioCtx || !engineOsc || !engineGain) return;
+  const absVel = Math.abs(velocidad);
+
+  // Silencio total cuando el auto está detenido o casi detenido (< 0.1)
+  if (absVel < 0.1 || isPaused || isGameOver) {
+    engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+    return;
+  }
+
+  // Activa volumen y modula el tono dinámicamente con la velocidad
+  const ratio = absVel / maxVel;
   const freq = 40 + ratio * 160;
-  engineOsc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.1);
+  const vol = 0.02 + ratio * 0.04;
+
+  engineOsc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.08);
+  engineGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.08);
 }
 
 function reproducirEfectoDerrape() {
@@ -243,24 +279,10 @@ function prepararEstadoInicial() {
 }
 
 function colocarAutoEnSalida() {
-  const circuito = obtenerCircuitoActual();
-  let p1 = circuito[0];
-  let p2 = circuito[1];
-
-  let dx = p2.x - p1.x;
-  let dy = p2.y - p1.y;
-  let dist = Math.hypot(dx, dy);
-
-  if (dist < 150 && circuito.length > 2) {
-    p1 = circuito[1];
-    p2 = circuito[2];
-    dx = p2.x - p1.x;
-    dy = p2.y - p1.y;
-  }
-
+  const { p1, dx, dy } = obtenerSegmentoMeta();
   const anguloPista = Math.atan2(dy, dx);
 
-  // Auto posicionado a 120px (DESPUÉS de la meta que está a 40px)
+  // Auto posicionado por delante de la meta sobre la recta
   car.x = p1.x + Math.cos(anguloPista) * 120;
   car.y = p1.y + Math.sin(anguloPista) * 120;
 
@@ -395,20 +417,7 @@ function gameStep() {
     }
 
     // Detección de Meta
-    const circuito = obtenerCircuitoActual();
-    let p1 = circuito[0];
-    let p2 = circuito[1];
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
-    let dist = Math.hypot(dx, dy);
-
-    if (dist < 150 && circuito.length > 2) {
-      p1 = circuito[1];
-      p2 = circuito[2];
-      dx = p2.x - p1.x;
-      dy = p2.y - p1.y;
-    }
-
+    const { p1, dx, dy } = obtenerSegmentoMeta();
     const angulo = Math.atan2(dy, dx);
     const metaX = p1.x + Math.cos(angulo) * 40;
     const metaY = p1.y + Math.sin(angulo) * 40;
@@ -427,6 +436,9 @@ function gameStep() {
     while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
     while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
     cam.angle += diffAngle * 0.08;
+  } else {
+    // Si la carrera se detiene o pausa, silenciar motor
+    actualizarSonidoMotor(0, car.maxSpeed);
   }
 
   for (let i = particulas.length - 1; i >= 0; i--) {
@@ -607,20 +619,8 @@ function dibujarPista() {
   ctx.lineWidth = 80;
   ctx.stroke();
 
-  // 3. META CENTRADA EN RECTA VÁLIDA
-  let p1 = circuito[0];
-  let p2 = circuito[1];
-  let dx = p2.x - p1.x;
-  let dy = p2.y - p1.y;
-  let dist = Math.hypot(dx, dy);
-
-  if (dist < 150 && circuito.length > 2) {
-    p1 = circuito[1];
-    p2 = circuito[2];
-    dx = p2.x - p1.x;
-    dy = p2.y - p1.y;
-  }
-
+  // 3. META DIBUJADA SOBRE TRAMO RECTO VÁLIDO
+  const { p1, dx, dy } = obtenerSegmentoMeta();
   const angulo = Math.atan2(dy, dx);
   const metaX = p1.x + Math.cos(angulo) * 40;
   const metaY = p1.y + Math.sin(angulo) * 40;
