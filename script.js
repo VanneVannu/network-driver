@@ -55,7 +55,7 @@ let particulas = [];
 const keys = { up: false, down: false, left: false, right: false, nitro: false };
 
 // ===================================================
-// CIRCUITOS CON PUNTOS DE CONTROL (5 NIVELES COMPLETOS)
+// CIRCUITOS REESTRUCTURADOS (5 NIVELES PERFECTOS)
 // ===================================================
 const circuitos = [
   // Nivel 1: El Gran Óvalo Suave
@@ -69,23 +69,23 @@ const circuitos = [
     { x: 1100, y: 100 }, { x: 1300, y: 500 }, { x: 1000, y: 600 },
     { x: 1400, y: 900 }, { x: 800, y: 1050 }
   ],
-  // Nivel 3: Circuito en "8" Fluido
-  [
-    { x: 500, y: 900 }, { x: 300, y: 400 }, { x: 700, y: 150 },
-    { x: 1300, y: 150 }, { x: 1600, y: 500 }, { x: 1200, y: 950 },
-    { x: 800, y: 500 }
-  ],
-  // Nivel 4: Autódromo de Horquillas Redondeadas
+  // Nivel 3 (Anterior Nivel 4): Autódromo de Horquillas
   [
     { x: 400, y: 900 }, { x: 200, y: 500 }, { x: 400, y: 150 },
     { x: 800, y: 150 }, { x: 800, y: 650 }, { x: 1200, y: 150 },
     { x: 1600, y: 400 }, { x: 1500, y: 900 }, { x: 900, y: 850 }
   ],
-  // Nivel 5: Megacircuito Network Omega
+  // Nivel 4 (Anterior Nivel 5): Megacircuito Network
   [
     { x: 400, y: 1000 }, { x: 200, y: 450 }, { x: 500, y: 100 },
     { x: 1200, y: 100 }, { x: 1700, y: 400 }, { x: 1700, y: 850 },
     { x: 1200, y: 1100 }, { x: 900, y: 700 }, { x: 600, y: 1100 }
+  ],
+  // Nivel 5 (NUEVO MAPA 5): Supercircuito Cyber-Ring
+  [
+    { x: 500, y: 900 }, { x: 500, y: 300 }, { x: 1000, y: 200 },
+    { x: 1600, y: 400 }, { x: 1700, y: 900 }, { x: 1200, y: 1200 },
+    { x: 800, y: 800 }
   ]
 ];
 
@@ -93,27 +93,19 @@ function obtenerCircuitoActual() {
   return circuitos[(nivelActual - 1) % circuitos.length];
 }
 
-// Devuelve un tramo recto válido de la pista para la meta
-function obtenerSegmentoMeta() {
+function obtenerDatosMeta() {
   const circuito = obtenerCircuitoActual();
-  for (let i = 0; i < circuito.length; i++) {
-    let p1 = circuito[i];
-    let p2 = circuito[(i + 1) % circuito.length];
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
-    let dist = Math.hypot(dx, dy);
+  let p1 = circuito[0];
+  let p2 = circuito[1];
 
-    // Asegura una recta con longitud suficiente (> 300px)
-    if (dist >= 300) {
-      return { p1, p2, dx, dy, dist };
-    }
-  }
-  return { 
-    p1: circuito[0], 
-    p2: circuito[1], 
-    dx: circuito[1].x - circuito[0].x, 
-    dy: circuito[1].y - circuito[0].y 
-  };
+  let dx = p2.x - p1.x;
+  let dy = p2.y - p1.y;
+
+  const angulo = Math.atan2(dy, dx);
+  const metaX = p1.x + dx * 0.3;
+  const metaY = p1.y + dy * 0.3;
+
+  return { metaX, metaY, angulo, p1, p2, dx, dy };
 }
 
 // ===================================================
@@ -132,7 +124,6 @@ function iniciarAudio() {
 
   engineOsc.type = 'sawtooth';
   engineOsc.frequency.setValueAtTime(40, audioCtx.currentTime);
-  // Silencio inicial en reposo
   engineGain.gain.setValueAtTime(0, audioCtx.currentTime);
 
   engineOsc.connect(engineGain);
@@ -146,13 +137,11 @@ function actualizarSonidoMotor(velocidad, maxVel) {
   if (!audioCtx || !engineOsc || !engineGain) return;
   const absVel = Math.abs(velocidad);
 
-  // Silencio total cuando el auto está detenido o casi detenido (< 0.1)
   if (absVel < 0.1 || isPaused || isGameOver) {
     engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
     return;
   }
 
-  // Activa volumen y modula el tono dinámicamente con la velocidad
   const ratio = absVel / maxVel;
   const freq = 40 + ratio * 160;
   const vol = 0.02 + ratio * 0.04;
@@ -207,7 +196,7 @@ function reproducirMusicaSynth() {
 }
 
 // ===================================================
-// CONTROLES
+// CONTROLES DE TECLADO
 // ===================================================
 window.addEventListener('keydown', (e) => {
   if (isGameOver) return;
@@ -279,14 +268,12 @@ function prepararEstadoInicial() {
 }
 
 function colocarAutoEnSalida() {
-  const { p1, dx, dy } = obtenerSegmentoMeta();
-  const anguloPista = Math.atan2(dy, dx);
+  const { metaX, metaY, angulo } = obtenerDatosMeta();
 
-  // Auto posicionado por delante de la meta sobre la recta
-  car.x = p1.x + Math.cos(anguloPista) * 120;
-  car.y = p1.y + Math.sin(anguloPista) * 120;
+  car.x = metaX + Math.cos(angulo) * 80;
+  car.y = metaY + Math.sin(angulo) * 80;
 
-  car.angle = anguloPista;
+  car.angle = angulo;
   car.vx = 0;
   car.vy = 0;
   car.speed = 0;
@@ -405,7 +392,6 @@ function gameStep() {
 
     kmRecorridos += Math.sqrt(car.vx * car.vx + car.vy * car.vy) * 0.005;
 
-    // Partículas
     if (keys.nitro || fueraDePista || (Math.abs(car.speed) > 4 && (keys.left || keys.right))) {
       particulas.push({
         x: car.x - Math.cos(car.angle) * 15,
@@ -416,12 +402,7 @@ function gameStep() {
       });
     }
 
-    // Detección de Meta
-    const { p1, dx, dy } = obtenerSegmentoMeta();
-    const angulo = Math.atan2(dy, dx);
-    const metaX = p1.x + Math.cos(angulo) * 40;
-    const metaY = p1.y + Math.sin(angulo) * 40;
-
+    const { metaX, metaY } = obtenerDatosMeta();
     let distMeta = Math.hypot(car.x - metaX, car.y - metaY);
 
     if (distMeta < 45 && car.speed > 2 && kmRecorridos > 0.6 && !cruzoMeta) {
@@ -437,7 +418,6 @@ function gameStep() {
     while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
     cam.angle += diffAngle * 0.08;
   } else {
-    // Si la carrera se detiene o pausa, silenciar motor
     actualizarSonidoMotor(0, car.maxSpeed);
   }
 
@@ -602,7 +582,7 @@ function dibujarGridFondo() {
 function dibujarPista() {
   const circuito = obtenerCircuitoActual();
 
-  // 1. Borde Neón Exterior Redondeado
+  // 1. Borde Neón
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
   ctx.lineCap = 'round';
@@ -619,11 +599,8 @@ function dibujarPista() {
   ctx.lineWidth = 80;
   ctx.stroke();
 
-  // 3. META DIBUJADA SOBRE TRAMO RECTO VÁLIDO
-  const { p1, dx, dy } = obtenerSegmentoMeta();
-  const angulo = Math.atan2(dy, dx);
-  const metaX = p1.x + Math.cos(angulo) * 40;
-  const metaY = p1.y + Math.sin(angulo) * 40;
+  // 3. Meta Centrada
+  const { metaX, metaY, angulo } = obtenerDatosMeta();
 
   ctx.save();
   ctx.translate(metaX, metaY);
@@ -718,6 +695,21 @@ function dibujarMiniMapa() {
   ctx.restore();
 }
 
+// ===================================================
+// INICIALIZACIÓN DE BOTONES DOM Y EVENTOS
+// ===================================================
 window.onload = () => {
+  const btnStart = document.getElementById('btn-start');
+  if (btnStart) btnStart.addEventListener('click', iniciarCarrera);
+
+  const btnPause = document.getElementById('btn-pause');
+  if (btnPause) btnPause.addEventListener('click', pausarJuego);
+
+  const btnRestart = document.getElementById('btn-restart');
+  if (btnRestart) btnRestart.addEventListener('click', reiniciarCarrera);
+
+  const btnMenu = document.getElementById('btn-menu');
+  if (btnMenu) btnMenu.addEventListener('click', volverAlMenu);
+
   prepararEstadoInicial();
 };
