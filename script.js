@@ -166,8 +166,8 @@ function colocarAutoEnSalida() {
   const dy = pSiguiente.y - pSalida.y;
   const anguloPista = Math.atan2(dy, dx);
 
-  // Posicionar el coche a 60px de la salida (JUSTO ANTES de la meta que está a 120px)
-  const distAdelanto = 60;
+  // Auto aparece a 120px (DESPUÉS de la meta que está a 30px)
+  const distAdelanto = 120;
   car.x = pSalida.x + Math.cos(anguloPista) * distAdelanto;
   car.y = pSalida.y + Math.sin(anguloPista) * distAdelanto;
 
@@ -180,7 +180,7 @@ function colocarAutoEnSalida() {
   cam.y = car.y;
   cam.angle = car.angle;
 
-  cruzoMeta = false; // Reset explícito al colocar en la parrilla
+  cruzoMeta = false;
   framesFueraDePista = 0;
 }
 
@@ -295,20 +295,19 @@ function gameStep() {
       });
     }
 
-    // Detección de Meta segura
+    // Detección de Meta al completar la vuelta
     const circuitoActual = obtenerCircuitoActual();
     const p1 = circuitoActual[0];
     const p2 = circuitoActual[1];
     const angulo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
-    // Meta ubicada a 120px
-    const metaX = p1.x + Math.cos(angulo) * 120;
-    const metaY = p1.y + Math.sin(angulo) * 120;
+    const metaX = p1.x + Math.cos(angulo) * 30;
+    const metaY = p1.y + Math.sin(angulo) * 30;
 
     let distMeta = Math.hypot(car.x - metaX, car.y - metaY);
 
-    // Requiere velocidad mínima y no haberla cruzado antes
-    if (distMeta < 35 && car.speed > 2 && !cruzoMeta) {
+    // Solo permite completar nivel si está en la meta Y ya ha avanzado bastante en la pista (kmRecorridos > 0.8)
+    if (distMeta < 40 && car.speed > 2 && kmRecorridos > 0.8 && !cruzoMeta) {
       cruzoMeta = true;
       avanzarNivel();
     }
@@ -495,18 +494,19 @@ function dibujarPista() {
   ctx.lineWidth = 80;
   ctx.stroke();
 
-  // 3. DIBUJO DE META PERFECTA EN TRAMO RECTO
+  // DIBUJO DE META EN LA PARTE TRASERA DE LA PARRILLA
   const p1 = circuito[0];
   const p2 = circuito[1];
+  const anguloRecta = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
   // Dirección exacta de la recta inicial
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   const anguloRecta = Math.atan2(dy, dx);
 
-  // Colocamos la meta en el centro del tramo recto (distancia 120px)
-  const metaX = p1.x + Math.cos(anguloRecta) * 120;
-  const metaY = p1.y + Math.sin(anguloRecta) * 120;
+ // Meta colocada a 30px (detrás del coche)
+  const metaX = p1.x + Math.cos(anguloRecta) * 30;
+  const metaY = p1.y + Math.sin(anguloRecta) * 30;
 
   ctx.save();
   ctx.translate(metaX, metaY);
