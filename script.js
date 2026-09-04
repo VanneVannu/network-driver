@@ -1,11 +1,10 @@
 /* ===================================================
-   NETWORK-DRIVER // MOTOR DE CARRERA 360° CORREGIDO
+   NETWORK-DRIVER // MOTOR DE CARRERA ARCADE 360° PULIDO
    =================================================== */
 
 const canvas = document.getElementById('lienzo-carrera');
 const ctx = canvas.getContext('2d');
 
-// Ajustar resolución interna del Canvas
 canvas.width = 800;
 canvas.height = 450;
 
@@ -19,32 +18,37 @@ let isPaused = true;
 let isGameOver = false;
 
 // Estado de Fases
-let estadoFase = "INSPECCION"; // "INSPECCION", "COUNTDOWN", "CARRERA"
+let estadoFase = "INSPECCION";
 let countdownTimer = 3;
 let zoomFactor = 0.35;
 let targetZoom = 1.0;
 
-// Estado del Vehículo
+// Cámara Suave (Lerp)
+let cam = { x: 400, y: 650, angle: -Math.PI / 2 };
+
+// Estado del Vehículo con Física Vectorial de Derrape
 let car = {
   x: 400,
   y: 650,
+  vx: 0,
+  vy: 0,
   angle: -Math.PI / 2,
   speed: 0,
   maxSpeed: 8,
-  accel: 0.18,
-  friction: 0.96,
-  turnSpeed: 0.055
+  accel: 0.2,
+  friction: 0.97,
+  turnSpeed: 0.045
 };
 
-// Métricas
 let tiempoRestante = 45;
 let kmRecorridos = 0;
 let nivelActual = 1;
 
-// Teclas
+// Sistema de Partículas
+let particulas = [];
+
 const keys = { up: false, down: false, left: false, right: false, nitro: false };
 
-// Circuito Base
 const circuitoBase = [
   { x: 400, y: 650 },
   { x: 400, y: 250 },
@@ -60,7 +64,6 @@ const circuitoBase = [
    =================================================== */
 window.addEventListener('keydown', (e) => {
   if (isGameOver || estadoFase !== "CARRERA") return;
-
   if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') keys.up = true;
   if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = true;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
@@ -77,7 +80,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 /* ===================================================
-   FLUJO Y BOTONES
+   FLUJO DE JUEGO
    =================================================== */
 function iniciarCarrera() {
   const aliasInput = document.getElementById('input-alias').value.trim();
@@ -98,14 +101,18 @@ function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
 
-  car.x = 400;
-  car.y = 650;
+  car.x = 400; car.y = 650;
+  car.vx = 0; car.vy = 0;
   car.angle = -Math.PI / 2;
   car.speed = 0;
+
+  cam.x = car.x; cam.y = car.y; cam.angle = car.angle;
 
   tiempoRestante = 45;
   kmRecorridos = 0;
   nivelActual = 1;
+  particulas = [];
+
   isGameOver = false;
   isPaused = true;
   
@@ -118,7 +125,6 @@ function prepararEstadoInicial() {
   const btnPause = document.getElementById('btn-pause');
   if (btnPause) btnPause.innerText = '[ INICIAR CARRERA ]';
 
-  // Iniciar bucle constante de dibujo (60 FPS)
   gameLoopInterval = setInterval(gameStep, 1000 / 60);
 }
 
@@ -174,7 +180,7 @@ function volverAlMenu() {
 }
 
 /* ===================================================
-   FÍSICA
+   FÍSICA MEJORADA CON DERRAPE Y CÁMARA EULERIANA
    =================================================== */
 function gameStep() {
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
@@ -182,37 +188,68 @@ function gameStep() {
   }
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
+    // Giro del auto
     if (keys.left) car.angle -= car.turnSpeed;
     if (keys.right) car.angle += car.turnSpeed;
 
-    // Aceleración y Freno (Corregidos)
+    // Motor y Propulsión
     let topVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
-    
     if (keys.up) {
-      // W / Flecha Arriba -> ACELERAR HACIA ADELANTE
       if (car.speed < topVel) car.speed += car.accel;
     } else if (keys.down) {
-      // S / Flecha Abajo -> FRENAR / REVERSA
       if (car.speed > -topVel * 0.4) car.speed -= car.accel;
     } else {
       car.speed *= car.friction;
     }
 
-    // Actualización Vectorial de Posición (Signos adaptados a la orientación)
-    car.x += Math.cos(car.angle) * car.speed;
-    car.y += Math.sin(car.angle) * car.speed;
-    
-    kmRecorridos += Math.abs(car.speed) * 0.05;
+    // Vector de Fricción Lateral (Efecto Drift)
+    let forwardX = Math.cos(car.angle) * car.speed;
+    let forwardY = Math.sin(car.angle) * car.speed;
+
+    car.vx += (forwardX - car.vx) * 0.12; // Transición de inercia
+    car.vy += (forwardY - car.vy) * 0.12;
+
+    car.x += car.vx;
+    car.y += car.vy;
+
+    kmRecorridos += Math.sqrt(car.vx * car.vx + car.vy * car.vy) * 0.05;
+
+    // Generar partículas de Nitro / Drift
+    if (keys.nitro || (Math.abs(car.speed) > 4 && (keys.left || keys.right))) {
+      particulas.push({
+        x: car.x - Math.cos(car.angle) * 15,
+        y: car.y - Math.sin(car.angle) * 15,
+        size: Math.random() * 4 + 2,
+        life: 1.0,
+        color: keys.nitro ? '#facc15' : '#d946ef'
+      });
+    }
 
     // Detección de Meta
     if (car.x >= 350 && car.x <= 450 && car.y >= 630 && car.y <= 670 && car.speed > 1) {
       nivelActual++;
       tiempoRestante += 25;
-      car.x = 400;
-      car.y = 650;
+      car.x = 400; car.y = 650;
+      car.vx = 0; car.vy = 0;
       car.angle = -Math.PI / 2;
       car.speed = 0;
     }
+
+    // Suavizado de Cámara (Lerp)
+    cam.x += (car.x - cam.x) * 0.1;
+    cam.y += (car.y - cam.y) * 0.1;
+    
+    // Angulo de cámara suave
+    let diffAngle = car.angle - cam.angle;
+    while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
+    while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
+    cam.angle += diffAngle * 0.08;
+  }
+
+  // Actualizar Partículas
+  for (let i = particulas.length - 1; i >= 0; i--) {
+    particulas[i].life -= 0.05;
+    if (particulas[i].life <= 0) particulas.splice(i, 1);
   }
 
   actualizarHUD();
@@ -239,7 +276,7 @@ function actualizarHUD() {
 }
 
 /* ===================================================
-   RENDERIZADO VISUAL
+   RENDERIZADO CON SUELO GRID Y EFECTOS
    =================================================== */
 function renderizar() {
   ctx.fillStyle = '#05020a';
@@ -250,15 +287,19 @@ function renderizar() {
   if (estadoFase === "INSPECCION") {
     ctx.translate(canvas.width / 2 - 200, canvas.height / 2 - 150);
     ctx.scale(0.45, 0.45);
+    dibujarGridFondo();
     dibujarPista();
     dibujarAutoJugador();
   } else {
+    // Matriz de Cámara Suave
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(zoomFactor, zoomFactor);
-    ctx.rotate(-car.angle - Math.PI / 2);
-    ctx.translate(-car.x, -car.y);
+    ctx.rotate(-cam.angle - Math.PI / 2);
+    ctx.translate(-cam.x, -cam.y);
 
+    dibujarGridFondo();
     dibujarPista();
+    dibujarParticulas();
     dibujarAutoJugador();
   }
 
@@ -274,21 +315,42 @@ function renderizar() {
   }
 }
 
+// Rejilla de Fondo Cyberpunk para Orientación Visual
+function dibujarGridFondo() {
+  ctx.strokeStyle = 'rgba(217, 70, 239, 0.07)';
+  ctx.lineWidth = 1;
+  const gridSize = 80;
+  
+  const startX = Math.floor((cam.x - 1000) / gridSize) * gridSize;
+  const endX = startX + 2000;
+  const startY = Math.floor((cam.y - 1000) / gridSize) * gridSize;
+  const endY = startY + 2000;
+
+  ctx.beginPath();
+  for (let x = startX; x < endX; x += gridSize) {
+    ctx.moveTo(x, startY); ctx.lineTo(x, endY);
+  }
+  for (let y = startY; y < endY; y += gridSize) {
+    ctx.moveTo(startX, y); ctx.lineTo(endX, y);
+  }
+  ctx.stroke();
+}
+
 function dibujarPista() {
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
   ctx.shadowColor = '#d946ef';
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 12;
   ctx.beginPath();
   trazarCaminoCircuito();
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   ctx.strokeStyle = '#120824';
-  ctx.lineWidth = 86;
+  ctx.lineWidth = 84;
   ctx.stroke();
 
-  // Línea de Meta
+  // Meta
   ctx.strokeStyle = '#facc15';
   ctx.lineWidth = 10;
   ctx.beginPath();
@@ -305,21 +367,29 @@ function trazarCaminoCircuito() {
   ctx.closePath();
 }
 
+function dibujarParticulas() {
+  for (let p of particulas) {
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1.0;
+}
+
 function dibujarAutoJugador() {
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
 
-  if (keys.nitro) {
-    ctx.fillStyle = '#facc15';
-    ctx.fillRect(-28, -6, 12, 12);
-  }
-
+  // Chasis con Glow
   ctx.fillStyle = '#d946ef';
   ctx.shadowColor = '#d946ef';
-  ctx.shadowBlur = 12;
+  ctx.shadowBlur = 10;
   ctx.fillRect(-18, -12, 36, 24);
 
+  // Parabrisas
   ctx.fillStyle = '#facc15';
   ctx.fillRect(-4, -9, 12, 18);
   ctx.shadowBlur = 0;
