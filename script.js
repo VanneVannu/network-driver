@@ -1,5 +1,6 @@
 /* ===================================================
-   NETWORK-DRIVER // MOTOR DE CARRERA ARCADE 360° PULIDO
+   NETWORK-DRIVER // MOTOR DE CARRERA 360° COMPLETO
+   NIVELES DINÁMICOS, ZONA OFF-ROAD Y ARRANQUE DIRECTO
    =================================================== */
 
 const canvas = document.getElementById('lienzo-carrera');
@@ -23,10 +24,10 @@ let countdownTimer = 3;
 let zoomFactor = 0.35;
 let targetZoom = 1.0;
 
-// Cámara Suave (Lerp)
+// Cámara Suave
 let cam = { x: 400, y: 650, angle: -Math.PI / 2 };
 
-// Estado del Vehículo con Física Vectorial de Derrape
+// Estado del Vehículo
 let car = {
   x: 400,
   y: 650,
@@ -35,35 +36,51 @@ let car = {
   angle: -Math.PI / 2,
   speed: 0,
   maxSpeed: 8,
-  accel: 0.2,
+  accel: 0.22,
   friction: 0.97,
-  turnSpeed: 0.045
+  turnSpeed: 0.05
 };
 
 let tiempoRestante = 45;
 let kmRecorridos = 0;
 let nivelActual = 1;
+let fueraDePista = false;
 
-// Sistema de Partículas
 let particulas = [];
 
 const keys = { up: false, down: false, left: false, right: false, nitro: false };
 
-const circuitoBase = [
-  { x: 400, y: 650 },
-  { x: 400, y: 250 },
-  { x: 650, y: 150 },
-  { x: 950, y: 250 },
-  { x: 950, y: 650 },
-  { x: 750, y: 800 },
-  { x: 550, y: 750 }
+// ===================================================
+// TRUTAS Y CIRCUITOS POR NIVEL
+// ===================================================
+const circuitos = [
+  // Nivel 1: Circuito Oval
+  [
+    { x: 400, y: 650 }, { x: 400, y: 250 }, { x: 650, y: 150 },
+    { x: 950, y: 250 }, { x: 950, y: 650 }, { x: 750, y: 800 }, { x: 550, y: 750 }
+  ],
+  // Nivel 2: Circuito con Chicana / S
+  [
+    { x: 400, y: 650 }, { x: 300, y: 300 }, { x: 600, y: 300 },
+    { x: 600, y: 100 }, { x: 1000, y: 100 }, { x: 1000, y: 650 }, { x: 700, y: 750 }
+  ],
+  // Nivel 3: Circuito Complejo (Hardcore)
+  [
+    { x: 400, y: 650 }, { x: 200, y: 400 }, { x: 400, y: 150 },
+    { x: 800, y: 150 }, { x: 1000, y: 350 }, { x: 800, y: 550 },
+    { x: 1100, y: 750 }, { x: 600, y: 850 }
+  ]
 ];
+
+function obtenerCircuitoActual() {
+  return circuitos[(nivelActual - 1) % circuitos.length];
+}
 
 /* ===================================================
    CONTROLES DE TECLADO
    =================================================== */
 window.addEventListener('keydown', (e) => {
-  if (isGameOver || estadoFase !== "CARRERA") return;
+  if (isGameOver) return;
   if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') keys.up = true;
   if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') keys.down = true;
   if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.left = true;
@@ -80,7 +97,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 /* ===================================================
-   FLUJO DE JUEGO
+   FLUJO DE JUEGO Y RESTART
    =================================================== */
 function iniciarCarrera() {
   const aliasInput = document.getElementById('input-alias').value.trim();
@@ -101,12 +118,7 @@ function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
 
-  car.x = 400; car.y = 650;
-  car.vx = 0; car.vy = 0;
-  car.angle = -Math.PI / 2;
-  car.speed = 0;
-
-  cam.x = car.x; cam.y = car.y; cam.angle = car.angle;
+  colocarAutoEnSalida();
 
   tiempoRestante = 45;
   kmRecorridos = 0;
@@ -128,12 +140,24 @@ function prepararEstadoInicial() {
   gameLoopInterval = setInterval(gameStep, 1000 / 60);
 }
 
+function colocarAutoEnSalida() {
+  const pInicio = obtenerCircuitoActual()[0];
+  car.x = pInicio.x;
+  car.y = pInicio.y;
+  car.vx = 0;
+  car.vy = 0;
+  car.angle = -Math.PI / 2;
+  car.speed = 0;
+
+  cam.x = car.x;
+  cam.y = car.y;
+  cam.angle = car.angle;
+}
+
 function pausarJuego() {
   if (isGameOver) return;
 
   if (estadoFase === "INSPECCION") {
-    keys.up = keys.down = keys.left = keys.right = keys.nitro = false;
-
     estadoFase = "COUNTDOWN";
     countdownTimer = 3;
 
@@ -145,6 +169,8 @@ function pausarJuego() {
       if (countdownTimer <= 0) {
         clearInterval(countdownInterval);
         countdownInterval = null;
+        
+        // Habilitar controles e inicio inmediato
         estadoFase = "CARRERA";
         isPaused = false;
         iniciarTimerReloj();
@@ -180,7 +206,7 @@ function volverAlMenu() {
 }
 
 /* ===================================================
-   FÍSICA MEJORADA CON DERRAPE Y CÁMARA EULERIANA
+   FÍSICA, OFF-ROAD Y DETECCIÓN DE META
    =================================================== */
 function gameStep() {
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
@@ -188,65 +214,71 @@ function gameStep() {
   }
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
-    // Giro del auto
+    // Verificar si estamos fuera de pista
+    verificarFueraDePista();
+
+    // Giros
     if (keys.left) car.angle -= car.turnSpeed;
     if (keys.right) car.angle += car.turnSpeed;
 
-    // Motor y Propulsión
-    let topVel = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
-    if (keys.up) {
-      if (car.speed < topVel) car.speed += car.accel;
+    // Velocidad máxima reducida si estás fuera de pista
+    let maxVelActual = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
+    if (fueraDePista) maxVelActual *= 0.35; // Frenado del 65% en pasto/código
+
+    if (keys.up || keys.nitro) {
+      let acelActual = keys.nitro ? car.accel * 1.5 : car.accel;
+      if (car.speed < maxVelActual) car.speed += acelActual;
     } else if (keys.down) {
-      if (car.speed > -topVel * 0.4) car.speed -= car.accel;
+      if (car.speed > -maxVelActual * 0.4) car.speed -= car.accel;
     } else {
       car.speed *= car.friction;
     }
 
-    // Vector de Fricción Lateral (Efecto Drift)
+    // Fricción extra fuera de pista
+    if (fueraDePista) car.speed *= 0.88;
+
+    // Movimiento Vectorial
     let forwardX = Math.cos(car.angle) * car.speed;
     let forwardY = Math.sin(car.angle) * car.speed;
 
-    car.vx += (forwardX - car.vx) * 0.12; // Transición de inercia
-    car.vy += (forwardY - car.vy) * 0.12;
+    car.vx += (forwardX - car.vx) * 0.15;
+    car.vy += (forwardY - car.vy) * 0.15;
 
     car.x += car.vx;
     car.y += car.vy;
 
     kmRecorridos += Math.sqrt(car.vx * car.vx + car.vy * car.vy) * 0.05;
 
-    // Generar partículas de Nitro / Drift
-    if (keys.nitro || (Math.abs(car.speed) > 4 && (keys.left || keys.right))) {
+    // Partículas
+    if (keys.nitro || fueraDePista || (Math.abs(car.speed) > 4 && (keys.left || keys.right))) {
       particulas.push({
         x: car.x - Math.cos(car.angle) * 15,
         y: car.y - Math.sin(car.angle) * 15,
         size: Math.random() * 4 + 2,
         life: 1.0,
-        color: keys.nitro ? '#facc15' : '#d946ef'
+        color: fueraDePista ? '#ff3355' : (keys.nitro ? '#facc15' : '#d946ef')
       });
     }
 
-    // Detección de Meta
-    if (car.x >= 350 && car.x <= 450 && car.y >= 630 && car.y <= 670 && car.speed > 1) {
-      nivelActual++;
-      tiempoRestante += 25;
-      car.x = 400; car.y = 650;
-      car.vx = 0; car.vy = 0;
-      car.angle = -Math.PI / 2;
-      car.speed = 0;
+    // DETECCIÓN DE META (Retorno al punto inicial)
+    const pMeta = obtenerCircuitoActual()[0];
+    let distMeta = Math.hypot(car.x - pMeta.x, car.y - pMeta.y);
+
+    if (distMeta < 50 && car.speed > 1) {
+      avanzarNivel();
     }
 
-    // Suavizado de Cámara (Lerp)
+    // Cámara Suave (Lerp)
     cam.x += (car.x - cam.x) * 0.1;
     cam.y += (car.y - cam.y) * 0.1;
     
-    // Angulo de cámara suave
     let diffAngle = car.angle - cam.angle;
     while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
     while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
     cam.angle += diffAngle * 0.08;
   }
 
-  // Actualizar Partículas
+  // Actualizar partículas
   for (let i = particulas.length - 1; i >= 0; i--) {
     particulas[i].life -= 0.05;
     if (particulas[i].life <= 0) particulas.splice(i, 1);
@@ -254,6 +286,44 @@ function gameStep() {
 
   actualizarHUD();
   renderizar();
+}
+
+// Comprueba la distancia mínima a los segmentos de la pista
+function verificarFueraDePista() {
+  const circuito = obtenerCircuitoActual();
+  let distMinima = 9999;
+
+  for (let i = 0; i < circuito.length; i++) {
+    const p1 = circuito[i];
+    const p2 = circuito[(i + 1) % circuito.length];
+    const dist = distanciaPuntoASegmento(car.x, car.y, p1.x, p1.y, p2.x, p2.y);
+    if (dist < distMinima) distMinima = dist;
+  }
+
+  // Ancho de la pista es 84px, el radio de tolerancia es 42px
+  fueraDePista = distMinima > 42;
+}
+
+function distanciaPuntoASegmento(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+function avanzarNivel() {
+  nivelActual++;
+  tiempoRestante += 20;
+
+  if (nivelActual > 3) {
+    isGameOver = true;
+    alert("¡FELICIDADES! HAS COMPLETADO TODOS LOS NIVELES.");
+    volverAlMenu();
+    return;
+  }
+
+  colocarAutoEnSalida();
 }
 
 function gameOverTimeout() {
@@ -267,7 +337,7 @@ function gameOverTimeout() {
 }
 
 function actualizarHUD() {
-  document.getElementById('score-val').innerText = `LAP ${nivelActual}/3`;
+  document.getElementById('score-val').innerText = `MAPA ${nivelActual}/3`;
   document.getElementById('speed-val').innerText = `${Math.floor(Math.abs(car.speed) * 25)} KM/H`;
 
   const tempEl = document.getElementById('temp-val');
@@ -276,7 +346,7 @@ function actualizarHUD() {
 }
 
 /* ===================================================
-   RENDERIZADO CON SUELO GRID Y EFECTOS
+   RENDERIZADO
    =================================================== */
 function renderizar() {
   ctx.fillStyle = '#05020a';
@@ -291,8 +361,11 @@ function renderizar() {
     dibujarPista();
     dibujarAutoJugador();
   } else {
-    // Matriz de Cámara Suave
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    // Sacudida de cámara si está fuera de pista
+    let shakeX = fueraDePista ? (Math.random() - 0.5) * 4 : 0;
+    let shakeY = fueraDePista ? (Math.random() - 0.5) * 4 : 0;
+
+    ctx.translate(canvas.width / 2 + shakeX, canvas.height / 2 + shakeY);
     ctx.scale(zoomFactor, zoomFactor);
     ctx.rotate(-cam.angle - Math.PI / 2);
     ctx.translate(-cam.x, -cam.y);
@@ -305,7 +378,17 @@ function renderizar() {
 
   ctx.restore();
 
-  if (estadoFase === "CARRERA") dibujarMiniMapa();
+  if (estadoFase === "CARRERA") {
+    dibujarMiniMapa();
+    
+    // Alerta Fuera de Pista en pantalla
+    if (fueraDePista) {
+      ctx.fillStyle = '#ff3355';
+      ctx.font = 'bold 18px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('[ ¡FUERA DE PISTA! ]', canvas.width / 2, canvas.height - 30);
+    }
+  }
 
   if (estadoFase === "COUNTDOWN" && countdownTimer > 0) {
     ctx.fillStyle = '#facc15';
@@ -315,9 +398,8 @@ function renderizar() {
   }
 }
 
-// Rejilla de Fondo Cyberpunk para Orientación Visual
 function dibujarGridFondo() {
-  ctx.strokeStyle = 'rgba(217, 70, 239, 0.07)';
+  ctx.strokeStyle = fueraDePista ? 'rgba(255, 51, 85, 0.12)' : 'rgba(217, 70, 239, 0.07)';
   ctx.lineWidth = 1;
   const gridSize = 80;
   
@@ -337,12 +419,14 @@ function dibujarGridFondo() {
 }
 
 function dibujarPista() {
+  const circuito = obtenerCircuitoActual();
+
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
   ctx.shadowColor = '#d946ef';
   ctx.shadowBlur = 12;
   ctx.beginPath();
-  trazarCaminoCircuito();
+  trazarCaminoCircuito(circuito);
   ctx.stroke();
   ctx.shadowBlur = 0;
 
@@ -350,19 +434,20 @@ function dibujarPista() {
   ctx.lineWidth = 84;
   ctx.stroke();
 
-  // Meta
+  // Línea de Meta
+  const pMeta = circuito[0];
   ctx.strokeStyle = '#facc15';
   ctx.lineWidth = 10;
   ctx.beginPath();
-  ctx.moveTo(350, 650);
-  ctx.lineTo(450, 650);
+  ctx.moveTo(pMeta.x - 50, pMeta.y);
+  ctx.lineTo(pMeta.x + 50, pMeta.y);
   ctx.stroke();
 }
 
-function trazarCaminoCircuito() {
-  ctx.moveTo(circuitoBase[0].x, circuitoBase[0].y);
-  for (let i = 1; i < circuitoBase.length; i++) {
-    ctx.lineTo(circuitoBase[i].x, circuitoBase[i].y);
+function trazarCaminoCircuito(circuito) {
+  ctx.moveTo(circuito[0].x, circuito[0].y);
+  for (let i = 1; i < circuito.length; i++) {
+    ctx.lineTo(circuito[i].x, circuito[i].y);
   }
   ctx.closePath();
 }
@@ -383,13 +468,11 @@ function dibujarAutoJugador() {
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
 
-  // Chasis con Glow
-  ctx.fillStyle = '#d946ef';
-  ctx.shadowColor = '#d946ef';
+  ctx.fillStyle = fueraDePista ? '#ff3355' : '#d946ef';
+  ctx.shadowColor = ctx.fillStyle;
   ctx.shadowBlur = 10;
   ctx.fillRect(-18, -12, 36, 24);
 
-  // Parabrisas
   ctx.fillStyle = '#facc15';
   ctx.fillRect(-4, -9, 12, 18);
   ctx.shadowBlur = 0;
@@ -402,6 +485,7 @@ function dibujarMiniMapa() {
   const mapH = 70;
   const mapX = canvas.width - mapW - 15;
   const mapY = 15;
+  const circuito = obtenerCircuitoActual();
 
   ctx.fillStyle = 'rgba(9, 5, 20, 0.85)';
   ctx.strokeStyle = '#d946ef';
@@ -411,11 +495,11 @@ function dibujarMiniMapa() {
 
   ctx.save();
   ctx.translate(mapX + 10, mapY + 10);
-  ctx.scale(0.12, 0.1);
+  ctx.scale(0.08, 0.07);
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 15;
   ctx.beginPath();
-  trazarCaminoCircuito();
+  trazarCaminoCircuito(circuito);
   ctx.stroke();
 
   ctx.fillStyle = '#facc15';
