@@ -477,7 +477,7 @@ function dibujarGridFondo() {
 function dibujarPista() {
   const circuito = obtenerCircuitoActual();
 
-  // 1. Borde Neón Exterior
+  // 1. Borde Neón Exterior Redondeado
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
   ctx.lineCap = 'round';
@@ -494,25 +494,19 @@ function dibujarPista() {
   ctx.lineWidth = 80;
   ctx.stroke();
 
-  // DIBUJO DE META EN LA PARTE TRASERA DE LA PARRILLA
+  // 3. DIBUJO DE META DETRÁS DEL AUTO
   const p1 = circuito[0];
   const p2 = circuito[1];
-  const anguloRecta = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+  const angulo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
-  // Dirección exacta de la recta inicial
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const anguloRecta = Math.atan2(dy, dx);
-
- // Meta colocada a 30px (detrás del coche)
-  const metaX = p1.x + Math.cos(anguloRecta) * 30;
-  const metaY = p1.y + Math.sin(anguloRecta) * 30;
+  // Meta colocada a 30px del inicio (detrás del coche)
+  const metaX = p1.x + Math.cos(angulo) * 30;
+  const metaY = p1.y + Math.sin(angulo) * 30;
 
   ctx.save();
   ctx.translate(metaX, metaY);
-  ctx.rotate(anguloRecta);
+  ctx.rotate(angulo);
 
-  // Línea perpendicular exacta al sentido de la recta
   ctx.strokeStyle = '#facc15';
   ctx.lineWidth = 10;
   ctx.beginPath();
