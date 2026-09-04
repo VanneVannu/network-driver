@@ -250,7 +250,9 @@ function iniciarCarrera() {
   if (escenarioJuego) escenarioJuego.classList.remove('oculto');
 
   prepararEstadoInicial();
+  pausarJuego(); // <--- Inicia automáticamente la cuenta regresiva 3, 2, 1
 }
+
 
 function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
@@ -307,7 +309,9 @@ function pausarJuego() {
     countdownTimer = 3;
 
     const btnPause = document.getElementById('btn-pause');
-    if (btnPause) btnPause.innerText = '[ EN CARRERA ]';
+    if (btnPause) btnPause.innerText = '[ PREPARÁNDOSE... ]';
+
+    if (countdownInterval) clearInterval(countdownInterval);
 
     countdownInterval = setInterval(() => {
       countdownTimer--;
@@ -315,8 +319,12 @@ function pausarJuego() {
         clearInterval(countdownInterval);
         countdownInterval = null;
         
+        // --- AQUÍ ESTABA EL BUG ---
         estadoFase = "CARRERA";
-        isPaused = false;
+        isPaused = false; // Despausamos el juego para que el auto se mueva
+        // --------------------------
+
+        if (btnPause) btnPause.innerText = '[ PAUSA ]';
         iniciarTimerReloj();
       }
     }, 1000);
