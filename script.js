@@ -135,8 +135,6 @@ function prepararEstadoInicial() {
   clearInterval(countdownInterval);
 
   nivelActual = 1;
-  colocarAutoEnSalida();
-
   tiempoRestante = 60;
   kmRecorridos = 0;
   particulas = [];
@@ -144,11 +142,13 @@ function prepararEstadoInicial() {
 
   isGameOver = false;
   isPaused = true;
+  cruzoMeta = false; // Asegurar reset de bandera
   
   estadoFase = "INSPECCION";
   zoomFactor = 0.35;
   targetZoom = 1.0;
 
+  colocarAutoEnSalida();
   actualizarHUD();
 
   const btnPause = document.getElementById('btn-pause');
@@ -166,7 +166,8 @@ function colocarAutoEnSalida() {
   const dy = pSiguiente.y - pSalida.y;
   const anguloPista = Math.atan2(dy, dx);
 
-  const distAdelanto = 100;
+  // Posicionar el coche a 60px de la salida (JUSTO ANTES de la meta que está a 120px)
+  const distAdelanto = 60;
   car.x = pSalida.x + Math.cos(anguloPista) * distAdelanto;
   car.y = pSalida.y + Math.sin(anguloPista) * distAdelanto;
 
@@ -179,7 +180,7 @@ function colocarAutoEnSalida() {
   cam.y = car.y;
   cam.angle = car.angle;
 
-  cruzoMeta = false;
+  cruzoMeta = false; // Reset explícito al colocar en la parrilla
   framesFueraDePista = 0;
 }
 
@@ -294,18 +295,20 @@ function gameStep() {
       });
     }
 
-    // Detección de Meta sobre el Tramo Recto
+    // Detección de Meta segura
     const circuitoActual = obtenerCircuitoActual();
     const p1 = circuitoActual[0];
     const p2 = circuitoActual[1];
     const angulo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
+    // Meta ubicada a 120px
     const metaX = p1.x + Math.cos(angulo) * 120;
     const metaY = p1.y + Math.sin(angulo) * 120;
 
     let distMeta = Math.hypot(car.x - metaX, car.y - metaY);
 
-    if (distMeta < 50 && car.speed > 2 && !cruzoMeta) {
+    // Requiere velocidad mínima y no haberla cruzado antes
+    if (distMeta < 35 && car.speed > 2 && !cruzoMeta) {
       cruzoMeta = true;
       avanzarNivel();
     }
@@ -354,15 +357,14 @@ function distanciaPuntoASegmento(px, py, x1, y1, x2, y2) {
 }
 
 function avanzarNivel() {
-  nivelActual++;
-
-  if (nivelActual > circuitos.length) {
+  if (nivelActual >= circuitos.length) {
     isGameOver = true;
     alert("¡LEYENDA DEL ROAD! HAS COMPLETADO LOS 5 MEGACIRCUITOS.");
     volverAlMenu();
     return;
   }
 
+  nivelActual++;
   tiempoRestante = 60;
   textoNotificacion = `¡NIVEL ${nivelActual} / ${circuitos.length} INICIADO!`;
   timerNotificacion = 150;
