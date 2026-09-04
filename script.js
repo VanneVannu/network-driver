@@ -143,20 +143,30 @@ function prepararEstadoInicial() {
 
 function colocarAutoEnSalida() {
   const circuito = obtenerCircuitoActual();
-  const pInicio = circuito[0];
-  
-  // Colocar el auto un poco antes/después de la línea para evitar colisión inmediata
-  car.x = pInicio.x;
-  car.y = pInicio.y + 30; 
+  const pSalida = circuito[0];
+  const pSiguiente = circuito[1];
+
+  // 1. Calcular la dirección/ángulo hacia donde va la pista desde la salida
+  const dx = pSiguiente.x - pSalida.x;
+  const dy = pSiguiente.y - pSalida.y;
+  const anguloPista = Math.atan2(dy, dx);
+
+  // 2. Colocar el auto 80 píxeles ADELANTE de la línea de meta
+  const distanciaAdelanto = 80;
+  car.x = pSalida.x + Math.cos(anguloPista) * distanciaAdelanto;
+  car.y = pSalida.y + Math.sin(anguloPista) * distanciaAdelanto;
+
+  // 3. Orientar el auto y la cámara hacia la dirección de la pista
+  car.angle = anguloPista;
   car.vx = 0;
   car.vy = 0;
-  car.angle = -Math.PI / 2;
   car.speed = 0;
-  cruzoMeta = false; // Resetea la meta para el nuevo nivel
 
   cam.x = car.x;
   cam.y = car.y;
   cam.angle = car.angle;
+
+  cruzoMeta = false;
 }
 
 function pausarJuego() {
@@ -265,11 +275,12 @@ function gameStep() {
       });
     }
 
-   // DETECCIÓN DE META (Requiere estar en movimiento rápido y no haberla activado ya)
+   // Detección de Meta al completar la vuelta
     const pMeta = obtenerCircuitoActual()[0];
     let distMeta = Math.hypot(car.x - pMeta.x, car.y - pMeta.y);
 
-    if (distMeta < 40 && car.speed > 2 && !cruzoMeta) {
+    // Solo activa la meta si el auto pasa cerca y va a más de 2 KM/H
+    if (distMeta < 50 && car.speed > 2 && !cruzoMeta) {
       cruzoMeta = true;
       avanzarNivel();
     }
