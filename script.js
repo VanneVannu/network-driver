@@ -1,6 +1,6 @@
 /* ===================================================
    NETWORK-DRIVER // MOTOR DE CARRERA 360° COMPLETO
-   NIVELES DINÁMICOS, ZONA OFF-ROAD Y ARRANQUE DIRECTO
+   NIVELES EXTENSOS, META DINÁMICA Y BANNER DE NIVEL
    =================================================== */
 
 const canvas = document.getElementById('lienzo-carrera');
@@ -17,18 +17,19 @@ let countdownInterval = null;
 
 let isPaused = true;
 let isGameOver = false;
-let cruzoMeta = false; // Evita activar la meta inmediatamente al aparecer
 
-// Estado de Fases
+// Estado de Fases y Notificaciones
 let estadoFase = "INSPECCION";
 let countdownTimer = 3;
 let zoomFactor = 0.35;
 let targetZoom = 1.0;
 
-// Cámara Suave
+let textoNotificacion = "";
+let timerNotificacion = 0;
+
+// Cámara y Coche
 let cam = { x: 400, y: 650, angle: -Math.PI / 2 };
 
-// Estado del Vehículo
 let car = {
   x: 400,
   y: 650,
@@ -42,10 +43,11 @@ let car = {
   turnSpeed: 0.05
 };
 
-let tiempoRestante = 45;
+let tiempoRestante = 60;
 let kmRecorridos = 0;
 let nivelActual = 1;
 let fueraDePista = false;
+let cruzoMeta = false;
 
 let particulas = [];
 
@@ -55,30 +57,30 @@ const keys = { up: false, down: false, left: false, right: false, nitro: false }
 // CIRCUITOS EXTENSOS (5 NIVELES)
 // ===================================================
 const circuitos = [
-  // Nivel 1: El Gran Óvalo Tecnológico (Introductorio pero amplio)
+  // Nivel 1: El Gran Óvalo Tecnológico
   [
     { x: 400, y: 800 }, { x: 400, y: 200 }, { x: 800, y: 100 },
     { x: 1400, y: 200 }, { x: 1500, y: 800 }, { x: 1000, y: 1000 }, { x: 600, y: 950 }
   ],
-  // Nivel 2: La Serpiente Neón (Chicanas y curvas dobles)
+  // Nivel 2: La Serpiente Neón
   [
     { x: 400, y: 800 }, { x: 300, y: 400 }, { x: 600, y: 300 },
     { x: 500, y: 100 }, { x: 1100, y: 100 }, { x: 1200, y: 400 },
     { x: 900, y: 500 }, { x: 1400, y: 800 }, { x: 900, y: 1000 }
   ],
-  // Nivel 3: Circuito en "8" Intersección Abierta (Tramos rápidos)
+  // Nivel 3: Circuito Intersección
   [
     { x: 500, y: 900 }, { x: 300, y: 500 }, { x: 600, y: 200 },
     { x: 1200, y: 200 }, { x: 1500, y: 500 }, { x: 1100, y: 900 },
     { x: 800, y: 500 }, { x: 1300, y: 700 }
   ],
-  // Nivel 4: El Laberinto de Horquillas (Técnico y estrecho de giro)
+  // Nivel 4: Laberinto de Horquillas
   [
     { x: 400, y: 900 }, { x: 200, y: 600 }, { x: 200, y: 200 },
     { x: 700, y: 200 }, { x: 700, y: 600 }, { x: 1100, y: 200 },
     { x: 1600, y: 200 }, { x: 1600, y: 800 }, { x: 1100, y: 950 }, { x: 800, y: 800 }
   ],
-  // Nivel 5: Megacircuito "Network Omega" (El mapa definitivo)
+  // Nivel 5: Megacircuito Network Omega
   [
     { x: 400, y: 1000 }, { x: 200, y: 500 }, { x: 400, y: 150 },
     { x: 1000, y: 100 }, { x: 1600, y: 300 }, { x: 1800, y: 700 },
@@ -91,7 +93,7 @@ function obtenerCircuitoActual() {
 }
 
 /* ===================================================
-   CONTROLES DE TECLADO
+   CONTROLES
    =================================================== */
 window.addEventListener('keydown', (e) => {
   if (isGameOver) return;
@@ -111,7 +113,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 /* ===================================================
-   FLUJO DE JUEGO Y RESTART
+   FLUJO DE JUEGO
    =================================================== */
 function iniciarCarrera() {
   const aliasInput = document.getElementById('input-alias').value.trim();
@@ -132,7 +134,7 @@ function prepararEstadoInicial() {
   clearInterval(gameLoopInterval);
   clearInterval(countdownInterval);
 
-  nivelActual = 1; // Asegura iniciar siempre en nivel 1
+  nivelActual = 1;
   colocarAutoEnSalida();
 
   tiempoRestante = 60;
@@ -159,17 +161,16 @@ function colocarAutoEnSalida() {
   const pSalida = circuito[0];
   const pSiguiente = circuito[1];
 
-  // 1. Calcular la dirección/ángulo hacia donde va la pista desde la salida
+  // Calcular orientación inicial según la dirección del tramo
   const dx = pSiguiente.x - pSalida.x;
   const dy = pSiguiente.y - pSalida.y;
   const anguloPista = Math.atan2(dy, dx);
 
-  // 2. Colocar el auto 80 píxeles ADELANTE de la línea de meta
-  const distanciaAdelanto = 80;
-  car.x = pSalida.x + Math.cos(anguloPista) * distanciaAdelanto;
-  car.y = pSalida.y + Math.sin(anguloPista) * distanciaAdelanto;
+  // Posicionar 80px por delante de la salida
+  const distAdelanto = 80;
+  car.x = pSalida.x + Math.cos(anguloPista) * distAdelanto;
+  car.y = pSalida.y + Math.sin(anguloPista) * distAdelanto;
 
-  // 3. Orientar el auto y la cámara hacia la dirección de la pista
   car.angle = anguloPista;
   car.vx = 0;
   car.vy = 0;
@@ -198,7 +199,6 @@ function pausarJuego() {
         clearInterval(countdownInterval);
         countdownInterval = null;
         
-        // Habilitar controles e inicio inmediato
         estadoFase = "CARRERA";
         isPaused = false;
         iniciarTimerReloj();
@@ -234,7 +234,7 @@ function volverAlMenu() {
 }
 
 /* ===================================================
-   FÍSICA, OFF-ROAD Y DETECCIÓN DE META
+   FÍSICA Y CICLO DE JUEGO
    =================================================== */
 function gameStep() {
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
@@ -242,16 +242,13 @@ function gameStep() {
   }
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
-    // Verificar si estamos fuera de pista
     verificarFueraDePista();
 
-    // Giros
     if (keys.left) car.angle -= car.turnSpeed;
     if (keys.right) car.angle += car.turnSpeed;
 
-    // Velocidad máxima reducida si estás fuera de pista
     let maxVelActual = keys.nitro ? car.maxSpeed * 1.4 : car.maxSpeed;
-    if (fueraDePista) maxVelActual *= 0.35; // Frenado del 65% en pasto/código
+    if (fueraDePista) maxVelActual *= 0.35;
 
     if (keys.up || keys.nitro) {
       let acelActual = keys.nitro ? car.accel * 1.5 : car.accel;
@@ -262,10 +259,8 @@ function gameStep() {
       car.speed *= car.friction;
     }
 
-    // Fricción extra fuera de pista
     if (fueraDePista) car.speed *= 0.88;
 
-    // Movimiento Vectorial
     let forwardX = Math.cos(car.angle) * car.speed;
     let forwardY = Math.sin(car.angle) * car.speed;
 
@@ -288,17 +283,16 @@ function gameStep() {
       });
     }
 
-   // Detección de Meta al completar la vuelta
+    // META
     const pMeta = obtenerCircuitoActual()[0];
     let distMeta = Math.hypot(car.x - pMeta.x, car.y - pMeta.y);
 
-    // Solo activa la meta si el auto pasa cerca y va a más de 2 KM/H
     if (distMeta < 50 && car.speed > 2 && !cruzoMeta) {
       cruzoMeta = true;
       avanzarNivel();
     }
 
-    // Cámara Suave (Lerp)
+    // Cámara Suave
     cam.x += (car.x - cam.x) * 0.1;
     cam.y += (car.y - cam.y) * 0.1;
     
@@ -308,17 +302,18 @@ function gameStep() {
     cam.angle += diffAngle * 0.08;
   }
 
-  // Actualizar partículas
+  // Partículas y Temporizador de Notificación
   for (let i = particulas.length - 1; i >= 0; i--) {
     particulas[i].life -= 0.05;
     if (particulas[i].life <= 0) particulas.splice(i, 1);
   }
 
+  if (timerNotificacion > 0) timerNotificacion--;
+
   actualizarHUD();
   renderizar();
 }
 
-// Comprueba la distancia mínima a los segmentos de la pista
 function verificarFueraDePista() {
   const circuito = obtenerCircuitoActual();
   let distMinima = 9999;
@@ -330,7 +325,6 @@ function verificarFueraDePista() {
     if (dist < distMinima) distMinima = dist;
   }
 
-  // Ancho de la pista es 84px, el radio de tolerancia es 42px
   fueraDePista = distMinima > 42;
 }
 
@@ -344,9 +338,7 @@ function distanciaPuntoASegmento(px, py, x1, y1, x2, y2) {
 
 function avanzarNivel() {
   nivelActual++;
-  
-  // Damos 35 segundos extra por cada mapa gigante completado
-  tiempoRestante += 35; 
+  tiempoRestante += 35;
 
   if (nivelActual > circuitos.length) {
     isGameOver = true;
@@ -354,6 +346,10 @@ function avanzarNivel() {
     volverAlMenu();
     return;
   }
+
+  // Activar Notificación en Pantalla (Dura ~2.5 segundos)
+  textoNotificacion = `¡NIVEL ${nivelActual} / ${circuitos.length} INICIADO!`;
+  timerNotificacion = 150;
 
   colocarAutoEnSalida();
 }
@@ -369,7 +365,6 @@ function gameOverTimeout() {
 }
 
 function actualizarHUD() {
-  // Ahora muestra 5 niveles
   document.getElementById('score-val').innerText = `MAPA ${nivelActual}/${circuitos.length}`;
   document.getElementById('speed-val').innerText = `${Math.floor(Math.abs(car.speed) * 25)} KM/H`;
 
@@ -379,7 +374,7 @@ function actualizarHUD() {
 }
 
 /* ===================================================
-   RENDERIZADO
+   RENDERIZADO Y DIBUJO
    =================================================== */
 function renderizar() {
   ctx.fillStyle = '#05020a';
@@ -389,12 +384,11 @@ function renderizar() {
 
   if (estadoFase === "INSPECCION") {
     ctx.translate(canvas.width / 2 - 200, canvas.height / 2 - 150);
-    ctx.scale(0.45, 0.45);
+    ctx.scale(0.3, 0.3);
     dibujarGridFondo();
     dibujarPista();
     dibujarAutoJugador();
   } else {
-    // Sacudida de cámara si está fuera de pista
     let shakeX = fueraDePista ? (Math.random() - 0.5) * 4 : 0;
     let shakeY = fueraDePista ? (Math.random() - 0.5) * 4 : 0;
 
@@ -414,12 +408,26 @@ function renderizar() {
   if (estadoFase === "CARRERA") {
     dibujarMiniMapa();
     
-    // Alerta Fuera de Pista en pantalla
+    // Alerta Fuera de Pista
     if (fueraDePista) {
       ctx.fillStyle = '#ff3355';
       ctx.font = 'bold 18px Courier New';
       ctx.textAlign = 'center';
       ctx.fillText('[ ¡FUERA DE PISTA! ]', canvas.width / 2, canvas.height - 30);
+    }
+
+    // Banner de Cambio de Nivel
+    if (timerNotificacion > 0) {
+      ctx.fillStyle = 'rgba(18, 8, 36, 0.85)';
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2;
+      ctx.fillRect(canvas.width / 2 - 180, 20, 360, 45);
+      ctx.strokeRect(canvas.width / 2 - 180, 20, 360, 45);
+
+      ctx.fillStyle = '#facc15';
+      ctx.font = 'bold 16px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(textoNotificacion, canvas.width / 2, 48);
     }
   }
 
@@ -436,10 +444,10 @@ function dibujarGridFondo() {
   ctx.lineWidth = 1;
   const gridSize = 80;
   
-  const startX = Math.floor((cam.x - 1000) / gridSize) * gridSize;
-  const endX = startX + 2000;
-  const startY = Math.floor((cam.y - 1000) / gridSize) * gridSize;
-  const endY = startY + 2000;
+  const startX = Math.floor((cam.x - 1200) / gridSize) * gridSize;
+  const endX = startX + 2400;
+  const startY = Math.floor((cam.y - 1200) / gridSize) * gridSize;
+  const endY = startY + 2400;
 
   ctx.beginPath();
   for (let x = startX; x < endX; x += gridSize) {
@@ -454,6 +462,7 @@ function dibujarGridFondo() {
 function dibujarPista() {
   const circuito = obtenerCircuitoActual();
 
+  // Borde Exterior Neón
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 98;
   ctx.shadowColor = '#d946ef';
@@ -463,17 +472,30 @@ function dibujarPista() {
   ctx.stroke();
   ctx.shadowBlur = 0;
 
+  // Asfalto Interior
   ctx.strokeStyle = '#120824';
   ctx.lineWidth = 84;
   ctx.stroke();
 
-  // Línea de Meta
-  const pMeta = circuito[0];
+  // DIBUJO AJUSTADO DE LA LÍNEA DE META
+  const p1 = circuito[0];
+  const p2 = circuito[1];
+  
+  // Calcular la perpendicular a la pista
+  const anguloPista = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+  const anguloPerpendicular = anguloPista + Math.PI / 2;
+  const anchoAnchoMeta = 40; // Mantener la línea dentro del ancho de 84px de la pista
+
+  const x1 = p1.x + Math.cos(anguloPerpendicular) * anchoAnchoMeta;
+  const y1 = p1.y + Math.sin(anguloPerpendicular) * anchoAnchoMeta;
+  const x2 = p1.x - Math.cos(anguloPerpendicular) * anchoAnchoMeta;
+  const y2 = p1.y - Math.sin(anguloPerpendicular) * anchoAnchoMeta;
+
   ctx.strokeStyle = '#facc15';
-  ctx.lineWidth = 10;
+  ctx.lineWidth = 8;
   ctx.beginPath();
-  ctx.moveTo(pMeta.x - 50, pMeta.y);
-  ctx.lineTo(pMeta.x + 50, pMeta.y);
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
   ctx.stroke();
 }
 
@@ -528,7 +550,7 @@ function dibujarMiniMapa() {
 
   ctx.save();
   ctx.translate(mapX + 10, mapY + 10);
-  ctx.scale(0.08, 0.07);
+  ctx.scale(0.05, 0.05);
   ctx.strokeStyle = '#d946ef';
   ctx.lineWidth = 15;
   ctx.beginPath();
@@ -537,7 +559,7 @@ function dibujarMiniMapa() {
 
   ctx.fillStyle = '#facc15';
   ctx.beginPath();
-  ctx.arc(car.x, car.y, 25, 0, Math.PI * 2);
+  ctx.arc(car.x, car.y, 30, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
