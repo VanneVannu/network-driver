@@ -1,6 +1,6 @@
 /* ===================================================
    NETWORK-DRIVER // MOTOR DE CARRERA 360° COMPLETO
-   NIVELES EXTENSOS, META DINÁMICA Y BANNER DE NIVEL
+   SISTEMA ANTI-ATAJOS, META ALINEADA Y NIVELES EXTENSOS
    =================================================== */
 
 const canvas = document.getElementById('lienzo-carrera');
@@ -26,6 +26,10 @@ let targetZoom = 1.0;
 
 let textoNotificacion = "";
 let timerNotificacion = 0;
+
+// Contador de penalización fuera de pista
+let framesFueraDePista = 0;
+let flashFaltaTimer = 0;
 
 // Cámara y Coche
 let cam = { x: 400, y: 650, angle: -Math.PI / 2 };
@@ -93,7 +97,7 @@ function obtenerCircuitoActual() {
 }
 
 /* ===================================================
-   CONTROLES
+   CONTROLES DE TECLADO
    =================================================== */
 window.addEventListener('keydown', (e) => {
   if (isGameOver) return;
@@ -113,7 +117,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 /* ===================================================
-   FLUJO DE JUEGO
+   FLUJO DE JUEGO Y RESTART
    =================================================== */
 function iniciarCarrera() {
   const aliasInput = document.getElementById('input-alias').value.trim();
@@ -140,6 +144,7 @@ function prepararEstadoInicial() {
   tiempoRestante = 60;
   kmRecorridos = 0;
   particulas = [];
+  framesFueraDePista = 0;
 
   isGameOver = false;
   isPaused = true;
@@ -161,12 +166,10 @@ function colocarAutoEnSalida() {
   const pSalida = circuito[0];
   const pSiguiente = circuito[1];
 
-  // Calcular orientación inicial según la dirección del tramo
   const dx = pSiguiente.x - pSalida.x;
   const dy = pSiguiente.y - pSalida.y;
   const anguloPista = Math.atan2(dy, dx);
 
-  // Posicionar 80px por delante de la salida
   const distAdelanto = 80;
   car.x = pSalida.x + Math.cos(anguloPista) * distAdelanto;
   car.y = pSalida.y + Math.sin(anguloPista) * distAdelanto;
@@ -181,6 +184,7 @@ function colocarAutoEnSalida() {
   cam.angle = car.angle;
 
   cruzoMeta = false;
+  framesFueraDePista = 0;
 }
 
 function pausarJuego() {
@@ -234,7 +238,7 @@ function volverAlMenu() {
 }
 
 /* ===================================================
-   FÍSICA Y CICLO DE JUEGO
+   FÍSICA, PENALIZACIÓN Y LÓGICA DE JUEGO
    =================================================== */
 function gameStep() {
   if (estadoFase === "COUNTDOWN" || estadoFase === "CARRERA") {
@@ -243,6 +247,19 @@ function gameStep() {
 
   if (estadoFase === "CARRERA" && !isPaused && !isGameOver) {
     verificarFueraDePista();
+
+    // Sanción Anti-Atajos (Restar 1s por cada 30 frames ~ 0.5s fuera de pista)
+    if (fueraDePista && Math.abs(car.speed) > 0.5) {
+      framesFueraDePista++;
+      if (framesFueraDePista >= 30) {
+        tiempoRestante = Math.max(0, tiempoRestante - 1);
+        framesFueraDePista = 0;
+        flashFaltaTimer = 15; // Activa destello visual
+        if (tiempoRestante <= 0) gameOverTimeout();
+      }
+    } else {
+      framesFueraDePista = 0;
+    }
 
     if (keys.left) car.angle -= car.turnSpeed;
     if (keys.right) car.angle += car.turnSpeed;
@@ -302,13 +319,14 @@ function gameStep() {
     cam.angle += diffAngle * 0.08;
   }
 
-  // Partículas y Temporizador de Notificación
+  // Actualizar temporizadores y partículas
   for (let i = particulas.length - 1; i >= 0; i--) {
     particulas[i].life -= 0.05;
     if (particulas[i].life <= 0) particulas.splice(i, 1);
   }
 
   if (timerNotificacion > 0) timerNotificacion--;
+  if (flashFaltaTimer > 0) flashFaltaTimer--;
 
   actualizarHUD();
   renderizar();
@@ -346,12 +364,9 @@ function avanzarNivel() {
     return;
   }
 
-  // REINICIO DE TIEMPO POR NIVEL (En lugar de sumar)
-  // Como los mapas se vuelven más extensos, podemos dar un tiempo adecuado para cada uno:
-  const tiemposPorNivel = [60, 65, 70, 75, 80]; 
-  tiempoRestante = tiemposPorNivel[nivelActual - 1] || 60;
+  // 60 Segundos fijos al empezar cada mapa
+  tiempoRestante = 60;
 
-  // Activar Notificación en Pantalla
   textoNotificacion = `¡NIVEL ${nivelActual} / ${circuitos.length} INICIADO!`;
   timerNotificacion = 150;
 
@@ -374,11 +389,11 @@ function actualizarHUD() {
 
   const tempEl = document.getElementById('temp-val');
   tempEl.innerText = `${tiempoRestante}S`;
-  tempEl.style.color = tiempoRestante <= 10 ? '#ff3355' : '#facc15';
+  tempEl.style.color = (flashFaltaTimer > 0 || tiempoRestante <= 10) ? '#ff3355' : '#facc15';
 }
 
 /* ===================================================
-   RENDERIZADO Y DIBUJO
+   RENDERIZADO
    =================================================== */
 function renderizar() {
   ctx.fillStyle = '#05020a';
@@ -412,15 +427,15 @@ function renderizar() {
   if (estadoFase === "CARRERA") {
     dibujarMiniMapa();
     
-    // Alerta Fuera de Pista
+    // Alerta de Fuera de Pista y Penalización
     if (fueraDePista) {
       ctx.fillStyle = '#ff3355';
       ctx.font = 'bold 18px Courier New';
       ctx.textAlign = 'center';
-      ctx.fillText('[ ¡FUERA DE PISTA! ]', canvas.width / 2, canvas.height - 30);
+      ctx.fillText('[ ¡FUERA DE PISTA! PENALIZACIÓN -1S ]', canvas.width / 2, canvas.height - 30);
     }
 
-    // Banner de Cambio de Nivel
+    // Banner de Nivel
     if (timerNotificacion > 0) {
       ctx.fillStyle = 'rgba(18, 8, 36, 0.85)';
       ctx.strokeStyle = '#facc15';
@@ -481,26 +496,24 @@ function dibujarPista() {
   ctx.lineWidth = 84;
   ctx.stroke();
 
-  // DIBUJO AJUSTADO DE LA LÍNEA DE META
+  // DIBUJO DE LÍNEA DE META PERPENDICULAR DENTRO DE LA PISTA
   const p1 = circuito[0];
   const p2 = circuito[1];
   
-  // Calcular la perpendicular a la pista
-  const anguloPista = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-  const anguloPerpendicular = anguloPista + Math.PI / 2;
-  const anchoAnchoMeta = 40; // Mantener la línea dentro del ancho de 84px de la pista
+  const anguloTramo = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
-  const x1 = p1.x + Math.cos(anguloPerpendicular) * anchoAnchoMeta;
-  const y1 = p1.y + Math.sin(anguloPerpendicular) * anchoAnchoMeta;
-  const x2 = p1.x - Math.cos(anguloPerpendicular) * anchoAnchoMeta;
-  const y2 = p1.y - Math.sin(anguloPerpendicular) * anchoAnchoMeta;
+  ctx.save();
+  ctx.translate(p1.x, p1.y);
+  ctx.rotate(anguloTramo);
 
   ctx.strokeStyle = '#facc15';
-  ctx.lineWidth = 8;
+  ctx.lineWidth = 10;
   ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
+  ctx.moveTo(0, -42);
+  ctx.lineTo(0, 42);
   ctx.stroke();
+
+  ctx.restore();
 }
 
 function trazarCaminoCircuito(circuito) {
